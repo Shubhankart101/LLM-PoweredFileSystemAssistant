@@ -1,0 +1,74 @@
+# ==============================================================================
+# .dockerignore - Docker build context exclusion rules
+# Excludes unnecessary files, secrets, build artifacts, and caches
+# ==============================================================================
+
+# Version Control
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD Workflows and configuration
+.github/
+
+# Python Bytecode & Cache Directories
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Testing & Coverage Artifacts
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.hypothesis/
+.tox/
+.nox/
+tests/
+
+# Python Virtual Environments
+venv/
+.venv/
+env/
+.env.virtualenv/
+ENV/
+build/
+dist/
+*.egg-info/
+
+# Environment Variables & Secret Files
+.env
+.env.*
+!.env.example
+
+# IDE, Editor & OS metadata
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Terraform & Cloud Infrastructure
+infra/
+terraform/
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+
+# Docker & Container Configs (prevent recursive nesting)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Temporary logs & scratch
+*.log
+*.tmp
+temp/
+tmp/

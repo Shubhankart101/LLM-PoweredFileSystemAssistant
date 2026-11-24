@@ -1,6 +1,32 @@
 # 📂 LLM-Powered File System Assistant
 
-An intelligent, autonomous file system assistant powered by Large Language Models (LLMs) with function calling. It inspects local directories, parses diverse document formats (PDF, DOCX, TXT), performs case-insensitive keyword searches with surrounding line context, and generates structured document summaries directly onto the filesystem.
+[![CI/CD Pipeline](https://github.com/Shubhankart101/LLM-PoweredFileSystemAssistant/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/Shubhankart101/LLM-PoweredFileSystemAssistant/actions/workflows/ci-cd.yml)
+[![Security Scan](https://github.com/Shubhankart101/LLM-PoweredFileSystemAssistant/actions/workflows/security-scan.yml/badge.svg)](https://github.com/Shubhankart101/LLM-PoweredFileSystemAssistant/actions/workflows/security-scan.yml)
+[![Terraform](https://img.shields.io/badge/IaC-Terraform%20v1.5+-844FBA?logo=terraform&logoColor=white)](infra/terraform)
+[![Docker](https://img.shields.io/badge/Container-Docker%20Multi--stage-2496ED?logo=docker&logoColor=white)](Dockerfile)
+[![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.14-3776AB?logo=python&logoColor=white)](requirements.txt)
+[![Tests](https://img.shields.io/badge/Tests-24%20passed-2ea44f?logo=pytest&logoColor=white)](tests/)
+
+An enterprise-ready, autonomous file system assistant powered by Large Language Models (LLMs) with structured function calling. It inspects local and cloud directories, parses diverse document formats (PDF, DOCX, TXT), performs case-insensitive keyword searches with surrounding line context, and generates structured document summaries directly onto the filesystem.
+
+Includes a complete **CI/CD pipeline**, **Infrastructure as Code (Terraform)** for AWS cloud deployment, **Docker containerization**, and a modular **Documentation Hub** under [`docs/`](docs/).
+
+---
+
+## 📚 Table of Contents
+
+- [🎯 Learning Objectives & Highlights](#-learning-objectives--highlights)
+- [🏗️ System Architecture & Workflow](#️-system-architecture--workflow)
+- [🔄 CI/CD Pipeline Architecture](#-cicd-pipeline-architecture)
+- [☁️ Cloud Infrastructure Deployment (IaC)](#️-cloud-infrastructure-deployment-iac)
+- [📖 Documentation Hub (`docs/`)](#-documentation-hub-docs)
+- [📁 Project Structure](#-project-structure)
+- [🚀 Quickstart & Installation](#-quickstart--installation)
+- [🐳 Docker & Container Deployment](#-docker--container-deployment)
+- [💻 Usage & CLI Modes](#-usage--cli-modes)
+- [🛠️ Core Tools Reference (`fs_tools.py`)](#️-core-tools-reference-fs_toolspy)
+- [🧪 Automated Testing](#-automated-testing)
+- [🎥 Demo Video Guide (2-3 Minutes)](#-demo-video-guide-2-3-minutes)
 
 ---
 
@@ -11,15 +37,16 @@ An intelligent, autonomous file system assistant powered by Large Language Model
 - **Multi-Format Document Parsing**: Native extraction of text content and metadata from **PDF** (`pypdf`), **DOCX** (`python-docx`), and **TXT** files.
 - **Robust Error Handling**: Gracefully handles missing files, permission anomalies, non-existent directories, and API fallbacks.
 - **Multi-Provider Support**: Compatible with **OpenAI** (`gpt-4o-mini`), **Anthropic** (`claude-3-5-sonnet-latest`), **Groq** (`llama-3.3-70b-versatile`), and an included **Deterministic Mock Engine** for 100% offline evaluation without API keys.
+- **Cloud & DevOps Ready**: Production multi-stage `Dockerfile`, `docker-compose.yml`, GitHub Actions CI/CD with security scanning, and modular Terraform configurations for AWS ECS Fargate, S3, Secrets Manager, and CloudWatch.
 
 ---
 
-## 🏗️ Architecture & Workflow
+## 🏗️ System Architecture & Workflow
 
 ```mermaid
 flowchart TD
-    User["👤 User Query"] --> Assistant["🤖 LLM File Assistant"]
-    Assistant --> LLM["🧠 LLM (OpenAI / Anthropic / Groq / Mock)"]
+    User["👤 User Query (CLI / API / Webhook)"] --> Assistant["🤖 LLM File Assistant Orchestrator"]
+    Assistant --> LLM["🧠 LLM Engine<br/>(OpenAI / Anthropic / Groq / Mock)"]
     
     LLM -- Function Calling --> ToolDecision{"Tool Call Decision"}
     
@@ -28,15 +55,106 @@ flowchart TD
     ToolDecision -->|"search_in_file()"| T3["🔍 search_in_file<br/>Context & Keyword Search"]
     ToolDecision -->|"write_file()"| T4["✍️ write_file<br/>Disk Writer with Auto-mkdir"]
     
-    T1 --> FileSys[("💾 File System")]
+    T1 --> FileSys[("💾 Storage Subsystem<br/>(Local Disk / AWS S3)")]
     T2 --> FileSys
     T3 --> FileSys
     T4 --> FileSys
     
-    FileSys --> Results["Structured Tool Output"]
+    FileSys --> Results["Structured Tool Output (JSON)"]
     Results --> LLM
     LLM --> Final["💬 Formatted Response to User"]
 ```
+
+---
+
+## 🔄 CI/CD Pipeline Architecture
+
+The application includes automated GitHub Actions pipelines implementing quality gates, testing matrices, security scans, container builds, and infrastructure validation:
+
+```mermaid
+flowchart LR
+    subgraph Trigger["Triggers"]
+        P1["Git Push (main)"]
+        P2["Pull Request"]
+        P3["Version Tag (v*)"]
+    end
+
+    subgraph CI["Continuous Integration (.github/workflows/ci-cd.yml)"]
+        L["1. Lint & Format<br/>(black, isort, flake8)"]
+        T["2. Test Matrix<br/>(Python 3.10, 3.11, 3.12)"]
+        S["3. Security Audit<br/>(pip-audit, bandit)"]
+        IV["4. Infra Validation<br/>(terraform validate)"]
+    end
+
+    subgraph Security["Security Scan (.github/workflows/security-scan.yml)"]
+        CQ["CodeQL SAST Analysis"]
+        TV["Trivy Vulnerability Scan"]
+    end
+
+    subgraph CD["Continuous Delivery"]
+        B["Docker Buildx Multi-Arch<br/>(amd64 / arm64)"]
+        R["Push to GHCR (ghcr.io)"]
+        D["Deploy to AWS ECS Fargate<br/>(Rolling Update)"]
+    end
+
+    Trigger --> L & T & S & IV
+    Trigger --> CQ & TV
+    T & S & IV --> B
+    B --> R --> D
+```
+
+Detailed workflow breakdown and configuration: [`docs/ci_cd_pipeline.md`](docs/ci_cd_pipeline.md).
+
+---
+
+## ☁️ Cloud Infrastructure Deployment (IaC)
+
+Enterprise-grade modular Terraform infrastructure located in [`infra/terraform/`](infra/terraform/):
+
+```mermaid
+flowchart TD
+    subgraph AWS["AWS Cloud Environment"]
+        subgraph VPC["Dedicated VPC (10.0.0.0/16)"]
+            ALB["Application Load Balancer<br/>(Public Subnets)"]
+            
+            subgraph Private["Private Subnets"]
+                ECS["ECS Fargate Service<br/>(Assistant Container)"]
+            end
+        end
+
+        S3["AWS S3 Bucket<br/>(SSE-AES256, Lifecycle, Versioning)<br/>• resumes/<br/>• summaries/"]
+        SM["AWS Secrets Manager<br/>(OPENAI / ANTHROPIC / GROQ Keys)"]
+        CW["CloudWatch Logs & Alarms<br/>(Metrics & Error Alerts)"]
+    end
+
+    ALB --> ECS
+    ECS -->|"Read / Write Resumes"| S3
+    ECS -->|"Fetch Keys at Startup"| SM
+    ECS -->|"Stream Logs & Metrics"| CW
+```
+
+- **Storage**: S3 dual-folder bucket with SSE-AES256 encryption, versioning, and lifecycle policies (transitions to Standard-IA at 30 days, Glacier at 90 days).
+- **Secrets Management**: AWS Secrets Manager prevents API keys from ever being exposed in code or Git.
+- **Compute**: AWS ECS Fargate cluster with rolling deployments, health checks, and autoscaling.
+- **Networking**: Custom VPC with public subnets, private subnets, security groups, and an Application Load Balancer.
+- **Monitoring**: CloudWatch log group, error rate metric filters, and automated alarms.
+
+Detailed infrastructure specifications: [`docs/infrastructure.md`](docs/infrastructure.md) and [`infra/terraform/README.md`](infra/terraform/README.md).
+
+---
+
+## 📖 Documentation Hub (`docs/`)
+
+Explore the in-depth documentation suite:
+
+| Document | Description |
+|---|---|
+| 📘 [`docs/README.md`](docs/README.md) | **Central Documentation Hub**: Overview, reading paths by role, and navigation index. |
+| 🏗️ [`docs/architecture.md`](docs/architecture.md) | **Architecture Guide**: Detailed component breakdown, ReAct loop, tool calling sequence diagrams, and security model. |
+| ☁️ [`docs/infrastructure.md`](docs/infrastructure.md) | **Cloud Infrastructure**: AWS reference topology, Terraform modules, IAM least-privilege policies, and CloudWatch metrics. |
+| 🔄 [`docs/ci_cd_pipeline.md`](docs/ci_cd_pipeline.md) | **CI/CD Pipeline**: GitHub Actions workflows, test matrices, SAST scanning, container buildx caching, and release automation. |
+| 📑 [`docs/api_reference.md`](docs/api_reference.md) | **API Reference**: Tool input schemas, return object types, format metadata, error models, and Python SDK contracts. |
+| 🚀 [`docs/deployment_guide.md`](docs/deployment_guide.md) | **Deployment Guide**: Step-by-step local bare-metal, Docker Compose, AWS ECS Fargate deployment, and operational runbook. |
 
 ---
 
@@ -46,15 +164,41 @@ flowchart TD
 LLM-PoweredFileSystemAssistant/
 │
 ├── fs_tools.py                  # Part A: Core File System Tools (read, list, write, search)
-├── llm_file_assistant.py        # Part B: LLM Assistant with function calling loop
+├── llm_file_assistant.py        # Part B: Autonomous LLM Assistant with function calling loop
 ├── create_sample_resumes.py     # Generator for realistic sample resumes (PDF, DOCX, TXT)
 ├── demo.py                      # Interactive/automated live demo script (ideal for video recording)
-├── requirements.txt             # Project dependencies
+├── requirements.txt             # Python dependencies
 ├── pytest.ini                   # Pytest configuration
 ├── .env.example                 # Environment variables template
-├── README.md                    # Comprehensive documentation
+├── README.md                    # Main repository documentation
 │
-├── resumes/                     # 8 sample candidate resumes
+├── Dockerfile                   # Multi-stage production container build (non-root appuser)
+├── .dockerignore                # Production container build exclusions
+├── docker-compose.yml           # Local multi-service container orchestration
+│
+├── .github/
+│   └── workflows/
+│       ├── ci-cd.yml            # Lint, test matrix, security audit, Docker build, Terraform validate
+│       └── security-scan.yml    # CodeQL SAST and Trivy vulnerability scanner
+│
+├── infra/
+│   └── terraform/               # Modular Infrastructure as Code
+│       ├── main.tf              # AWS resources (VPC, ECS Fargate, S3, Secrets Manager, ALB, CloudWatch)
+│       ├── variables.tf         # Strongly-typed input variables
+│       ├── outputs.tf           # Exported identifiers and endpoints
+│       ├── backend.tf           # Remote state S3 and DynamoDB lock configuration
+│       ├── terraform.tfvars.example # Sample dev and prod parameters
+│       └── README.md            # Terraform execution walkthrough
+│
+├── docs/                        # Complete Documentation Hub
+│   ├── README.md                # Documentation index and architecture overview
+│   ├── architecture.md          # Detailed architecture, sequence diagrams, and data flows
+│   ├── infrastructure.md        # Cloud architecture, IAM security, and monitoring
+│   ├── ci_cd_pipeline.md        # Pipeline stages, security gates, and release rules
+│   ├── api_reference.md         # Exhaustive tool schemas, return types, and SDK reference
+│   └── deployment_guide.md      # Local Docker, staging, and AWS production runbook
+│
+├── resumes/                     # 8 realistic candidate resumes across PDF, DOCX, and TXT
 │   ├── resume_john_doe.pdf      # Senior Python Backend Engineer (PDF)
 │   ├── resume_alice_smith.pdf   # Lead Data Scientist & ML Engineer (PDF)
 │   ├── resume_michael_brown.pdf # AI Systems Engineer (PDF)
@@ -65,7 +209,7 @@ LLM-PoweredFileSystemAssistant/
 │   └── resume_sarah_connor.txt  # Lead UI/UX Frontend Engineer (TXT)
 │
 ├── summaries/                   # Output folder created dynamically by write_file
-│   └── summary_john_doe.txt     # Generated candidate summary
+│   └── summary_john_doe.txt     # Generated candidate summary report
 │
 └── tests/                       # Unit & integration test suite (24 tests)
     ├── test_fs_tools.py         # Unit tests for core file system tools
@@ -77,12 +221,13 @@ LLM-PoweredFileSystemAssistant/
 ## 🚀 Quickstart & Installation
 
 ### 1. Prerequisites
-- Python 3.10+ (tested on Python 3.14)
+- Python 3.10+ (tested on Python 3.10, 3.11, 3.12, and 3.14)
 - Git
+- Docker (optional, for containerized run)
 
 ### 2. Clone Repository & Setup Virtual Environment
 ```bash
-git clone <your-repo-link>
+git clone https://github.com/Shubhankart101/LLM-PoweredFileSystemAssistant.git
 cd LLM-PoweredFileSystemAssistant
 
 # Create virtual environment
@@ -123,7 +268,30 @@ python create_sample_resumes.py
 
 ---
 
-## 💻 Usage
+## 🐳 Docker & Container Deployment
+
+### Run via Docker Compose (Recommended)
+```bash
+# Build and run the assistant interactively
+docker compose run --rm assistant
+
+# Execute the automated benchmark demo in a container
+docker compose --profile demo run --rm demo
+```
+
+### Build and Run Standalone Docker Image
+```bash
+# Build production image
+docker build -t llm-filesystem-assistant:latest .
+
+# Run single query
+docker run --rm -v ${PWD}/resumes:/app/resumes:ro -v ${PWD}/summaries:/app/summaries:rw \
+  llm-filesystem-assistant:latest "Find resumes mentioning Python experience"
+```
+
+---
+
+## 💻 Usage & CLI Modes
 
 ### A. Guided Live Demo (Best for video recording)
 Run the guided demo script with step-by-step pauses and visual banners:
@@ -243,7 +411,7 @@ tests/test_llm_assistant.py::TestLLMAssistantExecution::test_query_read_all_resu
 tests/test_llm_assistant.py::TestLLMAssistantExecution::test_query_find_python_resumes PASSED [ 95%]
 tests/test_llm_assistant.py::TestLLMAssistantExecution::test_query_create_summary_file PASSED [100%]
 
-============================= 24 passed in 0.45s ==============================
+============================= 24 passed in 0.40s ==============================
 ```
 
 ---
@@ -254,8 +422,9 @@ Follow this structured script when recording your submission video:
 
 | Time | Section | Action & Command | What to Explain |
 |---|---|---|---|
-| **0:00 - 0:30** | **Introduction & Overview** | Show VS Code project structure | Introduce the project, learning objectives, and 4 core tools in `fs_tools.py`. |
+| **0:00 - 0:30** | **Introduction & Overview** | Show VS Code project structure | Introduce the project, learning objectives, 4 core tools in `fs_tools.py`, and the `docs/` documentation hub. |
 | **0:30 - 1:00** | **Core Tools Demo** | Run `python demo.py` | Point out the 8 sample resumes in `resumes/` across PDF, DOCX, and TXT. Show text and metadata extraction. |
 | **1:00 - 1:40** | **Tool Calling: Query 1 & 2** | Step through Queries 1 & 2 | Point out the `[Tool Call]` traces: `list_files`, then `search_in_file`. Highlight how candidates with Python are found while non-Python resumes (e.g. Product Manager, Frontend) are filtered out. |
-| **1:40 - 2:20** | **Tool Calling: Query 3** | Step through Query 3 | Show multi-step execution: reading `resume_john_doe.pdf`, synthesizing the summary, and calling `write_file` to save `summaries/summary_john_doe.txt`. Open the generated summary file. |
-| **2:20 - 2:40** | **Test Suite** | Run `pytest` | Show all 24 automated tests passing cleanly. Conclude the video. |
+| **1:40 - 2:10** | **Tool Calling: Query 3** | Step through Query 3 | Show multi-step execution: reading `resume_john_doe.pdf`, synthesizing the summary, and calling `write_file` to save `summaries/summary_john_doe.txt`. Open the generated summary file. |
+| **2:10 - 2:30** | **CI/CD & Infrastructure** | Show `.github/workflows/ci-cd.yml` and `infra/terraform/` | Explain the CI/CD pipeline, Docker containerization, and AWS Terraform infrastructure. |
+| **2:30 - 2:45** | **Test Suite** | Run `pytest` | Show all 24 automated tests passing cleanly. Conclude the video. |

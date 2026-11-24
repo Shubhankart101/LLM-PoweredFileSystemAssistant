@@ -1,0 +1,74 @@
+# ==============================================================================
+# Docker Compose - LLM-Powered File System Assistant
+# Local orchestration, interactive execution, and persistence mounts
+# ==============================================================================
+
+services:
+  # ----------------------------------------------------------------------------
+  # Main File System Assistant Service (Interactive / Query Mode)
+  # ----------------------------------------------------------------------------
+  assistant:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    image: llm-file-assistant:latest
+    container_name: llm-file-assistant
+    restart: unless-stopped
+    stdin_open: true # Allows interactive console attachment (docker attach / exec)
+    tty: true        # Allocates pseudo-TTY for colored terminal rendering
+    volumes:
+      # Mount candidate resumes directory (read-write so new files can be placed)
+      - ./resumes:/app/resumes:rw
+      # Mount output summaries directory for persistent report generation
+      - ./summaries:/app/summaries:rw
+    environment:
+      - PYTHONUNBUFFERED=1
+      # LLM Provider credentials (fallback to mock mode if unset)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-3-5-sonnet-latest}
+    env_file:
+      - path: .env
+        required: false
+    healthcheck:
+      test: ["CMD", "python", "-c", "import fs_tools; import llm_file_assistant; print('healthy')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    # Default runs interactive assistant; override via CLI: docker compose run assistant "Read all resumes..."
+    command: ["--interactive"]
+
+  # ----------------------------------------------------------------------------
+  # Automated Demo Service (Runs end-to-end benchmark suite and exits)
+  # Run with: docker compose run --rm demo
+  # ----------------------------------------------------------------------------
+  demo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    image: llm-file-assistant:latest
+    container_name: llm-file-assistant-demo
+    profiles:
+      - demo
+    volumes:
+      - ./resumes:/app/resumes:rw
+      - ./summaries:/app/summaries:rw
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    env_file:
+      - path: .env
+        required: false
+    entrypoint: ["python", "demo.py"]
+    command: ["--auto"]

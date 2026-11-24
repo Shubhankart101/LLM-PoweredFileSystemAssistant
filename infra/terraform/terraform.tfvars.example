@@ -1,0 +1,75 @@
+# ==============================================================================
+# Terraform Variables Example
+# ==============================================================================
+# Copy this file to 'terraform.tfvars' and customize values for your deployment.
+#
+# Usage:
+#   cp terraform.tfvars.example terraform.tfvars
+#   terraform plan -var-file=terraform.tfvars
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. General Environment Settings
+# ------------------------------------------------------------------------------
+aws_region   = "us-east-1"
+environment  = "dev"                   # Options: "dev", "staging", "prod"
+app_name     = "llm-fs-assistant"
+
+# ------------------------------------------------------------------------------
+# 2. Container & Compute Configuration
+# ------------------------------------------------------------------------------
+container_image   = "123456789012.dkr.ecr.us-east-1.amazonaws.com/llm-fs-assistant:v1.0.0"
+container_port    = 8000
+cpu               = 512                # 256 (.25 vCPU), 512 (.5 vCPU), 1024 (1 vCPU), 2048 (2 vCPU)
+memory            = 1024               # 512, 1024, 2048, 4096 (MB)
+desired_count     = 1                  # Increase for production (e.g., 2 or 4)
+health_check_path = "/"
+
+# ------------------------------------------------------------------------------
+# 3. Networking Configuration
+# ------------------------------------------------------------------------------
+vpc_cidr             = "10.0.0.0/16"
+public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
+private_subnet_cidrs = ["10.0.10.0/24", "10.0.11.0/24"]
+
+# Set to 'true' in production for private task isolation behind NAT Gateway.
+# Set to 'false' in development to avoid hourly NAT Gateway charges.
+enable_nat_gateway   = false
+
+# ------------------------------------------------------------------------------
+# 4. Storage & Logging
+# ------------------------------------------------------------------------------
+s3_versioning_enabled       = true
+log_retention_days          = 30       # CloudWatch log retention in days
+secret_recovery_window_days = 0        # Set to 7 or 30 for production protection
+
+# ------------------------------------------------------------------------------
+# 5. Monitoring & CloudWatch Alarms
+# ------------------------------------------------------------------------------
+alarm_cpu_threshold         = 80       # Percent CPU
+alarm_memory_threshold      = 80       # Percent Memory
+alarm_error_count_threshold = 5        # Errors per 5 minutes
+
+# ------------------------------------------------------------------------------
+# 6. Global Resource Tags
+# ------------------------------------------------------------------------------
+tags = {
+  Project     = "LLM-PoweredFileSystemAssistant"
+  Owner       = "PlatformEngineering"
+  CostCenter  = "AI-RND"
+  Terraform   = "true"
+}
+
+# ==============================================================================
+# EXAMPLE: Production Environment Override (prod.tfvars)
+# ==============================================================================
+# environment                 = "prod"
+# desired_count               = 3
+# cpu                         = 1024
+# memory                      = 2048
+# enable_nat_gateway          = true
+# log_retention_days          = 90
+# secret_recovery_window_days = 30
+# alarm_cpu_threshold         = 75
+# alarm_memory_threshold      = 75
+# alarm_error_count_threshold = 3

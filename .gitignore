@@ -12,10 +12,22 @@ env/
 # Testing & Coverage
 .pytest_cache/
 .coverage
+.coverage.*
+coverage.xml
 htmlcov/
+trivy-results.sarif
 
 # OS and IDE files
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
+
+# Terraform & Infrastructure
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+infra/terraform/.terraform/
+infra/terraform/.terraform.lock.hcl
+
