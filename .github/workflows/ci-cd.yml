@@ -142,7 +142,7 @@ jobs:
 
       - name: Terraform Format Check
         run: |
-          terraform -chdir=infra/terraform fmt -check -diff
+          terraform fmt -check -diff -recursive infra/
 
       - name: Terraform Init (Backend-less)
         run: |

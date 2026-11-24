@@ -1,3 +1,12 @@
+resource "aws_cloudwatch_log_group" "this" {
+  name              = "/ecs/${var.app_name}-${var.environment}"
+  retention_in_days = var.log_retention_days
+
+  tags = merge(var.tags, {
+    Name = "${var.app_name}-${var.environment}-logs"
+  })
+}
+
 resource "aws_ecs_cluster" "this" {
   name = "${var.app_name}-${var.environment}-cluster"
 
@@ -116,6 +125,7 @@ resource "aws_ecs_task_definition" "this" {
       name      = var.app_name
       image     = var.container_image
       essential = true
+      command   = ["--serve", "--host", "0.0.0.0", "--port", tostring(var.container_port)]
 
       portMappings = [
         {
@@ -124,6 +134,14 @@ resource "aws_ecs_task_definition" "this" {
           protocol      = "tcp"
         }
       ]
+
+      healthCheck = {
+        command     = ["CMD-SHELL", "curl -sf http://localhost:${var.container_port}${var.health_check_path} || exit 1"]
+        interval    = 30
+        timeout     = 5
+        retries     = 3
+        startPeriod = 10
+      }
 
       environment = [
         { name = "ENVIRONMENT", value = var.environment },
@@ -139,7 +157,7 @@ resource "aws_ecs_task_definition" "this" {
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          "awslogs-group"         = var.log_group_name
+          "awslogs-group"         = aws_cloudwatch_log_group.this.name
           "awslogs-region"        = var.aws_region
           "awslogs-stream-prefix" = "app"
         }
@@ -173,7 +191,7 @@ resource "aws_lb_target_group" "this" {
   target_type = "ip"
 
   health_check {
-    path                = "/"
+    path                = var.health_check_path
     protocol            = "HTTP"
     matcher             = "200-399"
     interval            = 30
@@ -219,7 +237,7 @@ resource "aws_ecs_service" "this" {
   deployment_minimum_healthy_percent = 100
   deployment_maximum_percent         = 200
 
-  depends_on = [aws_lb_listener.http]
+  depends_on = [aws_lb_listener.http, aws_cloudwatch_log_group.this]
 
   tags = var.tags
 }

@@ -32,6 +32,12 @@ variable "enable_nat_gateway" {
   default     = true
 }
 
+variable "container_port" {
+  description = "Port exposed by the ECS container application"
+  type        = number
+  default     = 8000
+}
+
 variable "tags" {
   description = "Resource tags"
   type        = map(string)

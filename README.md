@@ -5,7 +5,7 @@
 [![Terraform](https://img.shields.io/badge/IaC-Terraform%20v1.5+-844FBA?logo=terraform&logoColor=white)](infra/terraform)
 [![Docker](https://img.shields.io/badge/Container-Docker%20Multi--stage-2496ED?logo=docker&logoColor=white)](Dockerfile)
 [![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.14-3776AB?logo=python&logoColor=white)](requirements.txt)
-[![Tests](https://img.shields.io/badge/Tests-24%20passed-2ea44f?logo=pytest&logoColor=white)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-27%20passed-2ea44f?logo=pytest&logoColor=white)](tests/)
 
 An enterprise-ready, autonomous file system assistant powered by Large Language Models (LLMs) with structured function calling. It inspects local and cloud directories, parses diverse document formats (PDF, DOCX, TXT), performs case-insensitive keyword searches with surrounding line context, and generates structured document summaries directly onto the filesystem.
 
@@ -232,9 +232,9 @@ LLM-PoweredFileSystemAssistant/
 ├── summaries/                   # Output folder created dynamically by write_file
 │   └── summary_john_doe.txt     # Generated candidate summary report
 │
-└── tests/                       # Unit & integration test suite (24 tests)
+└── tests/                       # Unit & integration test suite (27 tests)
     ├── test_fs_tools.py         # Unit tests for core file system tools
-    └── test_llm_assistant.py    # Integration tests for LLM tool calling
+    └── test_llm_assistant.py    # Integration tests for LLM tool calling & HTTP API
 ```
 
 ---
@@ -298,6 +298,9 @@ docker compose run --rm assistant
 
 # Execute the automated benchmark demo in a container
 docker compose --profile demo run --rm demo
+
+# Start HTTP API server mode on http://localhost:8000 (/health & /query)
+docker compose --profile api up -d
 ```
 
 ### Build and Run Standalone Docker Image
@@ -341,6 +344,12 @@ python llm_file_assistant.py "Find resumes mentioning Python experience"
 
 # Benchmark Query 3: Multi-Step Summarization
 python llm_file_assistant.py "Create a summary file for resume_john_doe.pdf"
+```
+
+### D. HTTP API Server Mode (Container & Cloud ALB Integration)
+```bash
+# Exposes GET /health and POST /query
+python llm_file_assistant.py --serve --port 8000
 ```
 
 ---
@@ -399,7 +408,7 @@ matches = fs_tools.search_in_file("resumes/resume_john_doe.pdf", "FastAPI")
 
 ## 🧪 Automated Testing
 
-A comprehensive test suite with 24 unit & integration tests is provided:
+A comprehensive test suite with 27 unit & integration tests is provided:
 ```bash
 pytest
 ```
@@ -407,32 +416,13 @@ pytest
 Output:
 ```
 ============================= test session starts =============================
-tests/test_fs_tools.py::TestListFiles::test_list_all_files PASSED        [  4%]
-tests/test_fs_tools.py::TestListFiles::test_filter_by_extension_with_dot PASSED [  8%]
-tests/test_fs_tools.py::TestListFiles::test_filter_by_extension_without_dot PASSED [ 12%]
-tests/test_fs_tools.py::TestListFiles::test_filter_txt_files PASSED      [ 16%]
-tests/test_fs_tools.py::TestListFiles::test_nonexistent_directory PASSED [ 20%]
-tests/test_fs_tools.py::TestReadFile::test_read_pdf_file PASSED          [ 25%]
-tests/test_fs_tools.py::TestReadFile::test_read_docx_file PASSED         [ 29%]
-tests/test_fs_tools.py::TestReadFile::test_read_txt_file PASSED          [ 33%]
-tests/test_fs_tools.py::TestReadFile::test_read_nonexistent_file PASSED  [ 37%]
-tests/test_fs_tools.py::TestWriteFile::test_write_and_auto_create_directories PASSED [ 41%]
-tests/test_fs_tools.py::TestWriteFile::test_overwrite_existing_file PASSED [ 45%]
-tests/test_fs_tools.py::TestSearchInFile::test_case_insensitive_search PASSED [ 50%]
-tests/test_fs_tools.py::TestSearchInFile::test_search_context_window PASSED [ 54%]
-tests/test_fs_tools.py::TestSearchInFile::test_search_nonexistent_keyword PASSED [ 58%]
-tests/test_fs_tools.py::TestSearchInFile::test_search_empty_keyword PASSED [ 62%]
-tests/test_llm_assistant.py::TestLLMAssistantSchemas::test_tool_definitions_schema PASSED [ 66%]
-tests/test_llm_assistant.py::TestLLMAssistantSchemas::test_tool_map_matches_definitions PASSED [ 70%]
-tests/test_llm_assistant.py::TestLLMAssistantExecution::test_provider_initialization_mock PASSED [ 75%]
-tests/test_llm_assistant.py::TestLLMAssistantExecution::test_provider_initialization_anthropic_fallback_without_key PASSED [ 79%]
-tests/test_llm_assistant.py::TestLLMAssistantExecution::test_tool_dispatch PASSED [ 83%]
-tests/test_llm_assistant.py::TestLLMAssistantExecution::test_invalid_tool_dispatch PASSED [ 87%]
-tests/test_llm_assistant.py::TestLLMAssistantExecution::test_query_read_all_resumes PASSED [ 91%]
-tests/test_llm_assistant.py::TestLLMAssistantExecution::test_query_find_python_resumes PASSED [ 95%]
-tests/test_llm_assistant.py::TestLLMAssistantExecution::test_query_create_summary_file PASSED [100%]
+tests/test_fs_tools.py::TestListFiles::test_list_all_files PASSED        [  3%]
+...
+tests/test_llm_assistant.py::TestLLMAssistantExecution::test_query_create_summary_file PASSED [ 92%]
+tests/test_llm_assistant.py::TestLLMAssistantExecution::test_conversation_history_updates PASSED [ 96%]
+tests/test_llm_assistant.py::TestHTTPServerMode::test_health_and_query_endpoints PASSED [100%]
 
-============================= 24 passed in 0.40s ==============================
+============================= 27 passed in 1.70s ==============================
 ```
 
 ---
@@ -448,4 +438,4 @@ Follow this structured script when recording your submission video:
 | **1:00 - 1:40** | **Tool Calling: Query 1 & 2** | Step through Queries 1 & 2 | Point out the `[Tool Call]` traces: `list_files`, then `search_in_file`. Highlight how candidates with Python are found while non-Python resumes (e.g. Product Manager, Frontend) are filtered out. |
 | **1:40 - 2:10** | **Tool Calling: Query 3** | Step through Query 3 | Show multi-step execution: reading `resume_john_doe.pdf`, synthesizing the summary, and calling `write_file` to save `summaries/summary_john_doe.txt`. Open the generated summary file. |
 | **2:10 - 2:30** | **CI/CD & Modular Infrastructure** | Show `.github/workflows/ci-cd.yml` and `infra/modules/` | Explain the CI/CD pipeline, Docker containerization, and modular AWS Terraform resources under `infra/modules/`. |
-| **2:30 - 2:45** | **Test Suite** | Run `pytest` | Show all 24 automated tests passing cleanly. Conclude the video. |
+| **2:30 - 2:45** | **Test Suite** | Run `pytest` | Show all 27 automated tests passing cleanly. Conclude the video. |

@@ -55,7 +55,7 @@ output "alb_dns_name" {
 # Monitoring Outputs
 output "cloudwatch_log_group_name" {
   description = "Name of the CloudWatch log group"
-  value       = module.monitoring.log_group_name
+  value       = module.ecs.log_group_name
 }
 
 output "cloudwatch_error_alarm_arn" {

@@ -8,10 +8,9 @@ variable "environment" {
   type        = string
 }
 
-variable "log_retention_days" {
-  description = "Days of CloudWatch logs retention"
-  type        = number
-  default     = 30
+variable "log_group_name" {
+  description = "Name of the CloudWatch log group to monitor"
+  type        = string
 }
 
 variable "ecs_cluster_name" {
@@ -32,6 +31,24 @@ variable "target_group_arn_suffix" {
 variable "alb_arn_suffix" {
   description = "ARN suffix of the ALB"
   type        = string
+}
+
+variable "alarm_cpu_threshold" {
+  description = "CPU percentage threshold for CloudWatch alarm"
+  type        = number
+  default     = 80
+}
+
+variable "alarm_memory_threshold" {
+  description = "Memory percentage threshold for CloudWatch alarm"
+  type        = number
+  default     = 80
+}
+
+variable "alarm_error_count_threshold" {
+  description = "Application error count threshold per period"
+  type        = number
+  default     = 5
 }
 
 variable "tags" {

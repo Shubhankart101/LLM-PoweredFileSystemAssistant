@@ -72,9 +72,16 @@ variable "secrets_arn" {
   type        = string
 }
 
-variable "log_group_name" {
-  description = "CloudWatch log group name"
+variable "health_check_path" {
+  description = "HTTP health check path on the container"
   type        = string
+  default     = "/health"
+}
+
+variable "log_retention_days" {
+  description = "Days of CloudWatch log retention"
+  type        = number
+  default     = 30
 }
 
 variable "aws_region" {

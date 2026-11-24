@@ -7,13 +7,13 @@ Creates the 'resumes/' directory and populates it with realistic candidate resum
 - TXT: resume_david_wilson.txt, resume_sarah_connor.txt
 """
 
-import os
 from pathlib import Path
+
 import docx
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
 RESUMES_DIR = Path(__file__).resolve().parent / "resumes"
 RESUMES_DIR.mkdir(parents=True, exist_ok=True)
@@ -40,7 +40,8 @@ RESUME_DATA = [
         ],
         "experience": [
             "Senior Python Engineer | TechCorp Inc. (2021 - Present)\n"
-            "- Led backend development of an enterprise SaaS platform processing 5M+ daily requests using Python and FastAPI.\n"
+            "- Led backend development of an enterprise SaaS platform "
+            "processing 5M+ daily requests using Python and FastAPI.\n"
             "- Designed asynchronous task queue using Celery and Redis to handle batch data exports in background.\n"
             "- Spearheaded database migration from MySQL to PostgreSQL, optimizing complex indexing.",
             "Backend Developer | CloudScale Solutions (2018 - 2021)\n"
@@ -400,22 +401,26 @@ def build_txt(resume: dict, dest: Path) -> None:
     for skill in resume["skills"]:
         lines.append(f"  * {skill}")
 
-    lines.extend([
-        "",
-        "WORK EXPERIENCE",
-        "-" * 40,
-    ])
+    lines.extend(
+        [
+            "",
+            "WORK EXPERIENCE",
+            "-" * 40,
+        ]
+    )
     for exp in resume["experience"]:
         lines.append(exp)
         lines.append("")
 
-    lines.extend([
-        "EDUCATION",
-        "-" * 40,
-        resume["education"],
-        "",
-        "=" * 70,
-    ])
+    lines.extend(
+        [
+            "EDUCATION",
+            "-" * 40,
+            resume["education"],
+            "",
+            "=" * 70,
+        ]
+    )
 
     dest.write_text("\n".join(lines), encoding="utf-8")
 

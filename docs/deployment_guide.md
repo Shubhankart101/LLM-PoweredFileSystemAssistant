@@ -1,226 +1,129 @@
 # 🚢 Deployment & Operations Guide
 
-This guide provides step-by-step operational instructions for deploying the **LLM-Powered File System Assistant** across local workstations, containerized environments, staging clusters, and production cloud infrastructure.
+This guide provides operational instructions for deploying the **LLM-Powered File System Assistant** locally, via Docker / Docker Compose, and to AWS ECS Fargate using Terraform.
 
 ---
 
 ## 1. Environment Variable Configuration Matrix
 
-Configure the application using the following environment variables (defined in `.env` locally or injected via AWS Secrets Manager / Kubernetes Secrets in production):
+Configure the application using environment variables (defined in `.env` locally or injected via AWS Secrets Manager in production):
 
-| Variable | Required | Default | Allowed Values | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `OPENAI_API_KEY` | Conditional | None | `sk-...` | OpenAI API authentication key |
-| `OPENAI_MODEL` | No | `gpt-4o-mini` | `gpt-4o-mini`, `gpt-4o`, `o1` | OpenAI model identifier |
-| `OPENAI_BASE_URL` | No | None | URL string | Custom OpenAI-compatible endpoint (e.g. Ollama `http://localhost:11434/v1`) |
-| `ANTHROPIC_API_KEY`| Conditional | None | `sk-ant-...` | Anthropic API authentication key |
-| `ANTHROPIC_MODEL` | No | `claude-3-5-sonnet-latest` | Claude model names | Anthropic model identifier |
-| `GROQ_API_KEY` | Conditional | None | `gsk_...` | Groq Cloud API authentication key |
-| `GROQ_MODEL` | No | `llama-3.3-70b-versatile` | LLaMA model names | Groq high-speed model identifier |
-| `LOG_LEVEL` | No | `INFO` | `DEBUG`, `INFO`, `WARNING` | Application logging verbosity |
+| Variable | Required | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `OPENAI_API_KEY` | Conditional | None | OpenAI API authentication key (`sk-...`) |
+| `OPENAI_MODEL` | No | `gpt-4o-mini` | OpenAI model identifier |
+| `OPENAI_BASE_URL` | No | None | Custom OpenAI-compatible endpoint (e.g. Ollama `http://localhost:11434/v1`) |
+| `ANTHROPIC_API_KEY` | Conditional | None | Anthropic API authentication key (`sk-ant-...`) |
+| `ANTHROPIC_MODEL` | No | `claude-3-5-sonnet-latest` | Anthropic model identifier |
+| `GROQ_API_KEY` | Conditional | None | Groq Cloud API authentication key (`gsk_...`) |
+| `GROQ_MODEL` | No | `llama-3.3-70b-versatile` | Groq model identifier |
+| `ASSISTANT_HOST` | No | `127.0.0.1` | Bind host when running `--serve` HTTP mode |
+| `PORT` | No | `8000` | Bind port when running `--serve` HTTP mode |
 
-> **Note on Offline Operation**: If no API keys are configured, the system automatically runs in deterministic **Mock Engine** mode.
+> **Offline Operation**: When no API keys are supplied, the assistant automatically routes queries through the deterministic `MockLLMEngine` so all CLI tools, demos, and HTTP endpoints continue operating offline.
 
 ---
 
 ## 2. Local Host Deployment (Bare Metal)
 
-### Step 1: Clone Repository & Create Virtual Environment
 ```bash
-git clone <repository-url>
+git clone https://github.com/Shubhankart101/LLM-PoweredFileSystemAssistant.git
 cd LLM-PoweredFileSystemAssistant
 
-# Create isolated Python virtual environment
+# Create and activate virtual environment
 python -m venv venv
+# Windows PowerShell: .\venv\Scripts\Activate.ps1
+# Linux / macOS:     source venv/bin/activate
 
-# Activate virtual environment
-# Windows (PowerShell):
-.\venv\Scripts\Activate.ps1
-# Linux / macOS:
-source venv/bin/activate
-```
-
-### Step 2: Install Dependencies
-```bash
+# Install dependencies and verify test suite
 pip install --upgrade pip
 pip install -r requirements.txt
-```
-
-### Step 3: Run Automated Test Verification
-```bash
 pytest
 ```
-*Expected: 24 passed in under 1 second.*
 
-### Step 4: Run the Assistant
+Run in any of the supported modes:
 ```bash
-# Execute a single natural language query
+# Single query CLI
 python llm_file_assistant.py "Find resumes mentioning Python experience"
 
-# Or launch the interactive terminal session
+# Interactive REPL
 python llm_file_assistant.py --interactive
+
+# Guided demo (for presentation/recording)
+python demo.py
+
+# HTTP API server
+python llm_file_assistant.py --serve --port 8000
 ```
 
 ---
 
-## 3. Containerized Deployment (Docker)
+## 3. Containerized Deployment (Docker & Docker Compose)
 
-### 3.1 Production Multi-Stage `Dockerfile`
-Create or use the following production-hardened `Dockerfile`:
+### 3.1 Multi-Stage `Dockerfile` Overview
+The repository's root `Dockerfile` implements:
+- **Builder Stage (`python:3.12-slim`)**: Compiles packages into an isolated `/opt/venv`.
+- **Runner Stage (`python:3.12-slim`)**: Copies `/opt/venv`, installs `ca-certificates` and `curl`, runs under non-root `appuser` (UID `10001`), exposes port `8000`, defines persistent volumes `/app/resumes` and `/app/summaries`, and configures a container `HEALTHCHECK`.
 
-```dockerfile
-# ==============================================================================
-# Stage 1: Build & Dependency Resolution
-# ==============================================================================
-FROM python:3.11-slim AS builder
+### 3.2 Running via `docker-compose.yml`
 
-WORKDIR /build
+`docker-compose.yml` provides three ready-to-use service profiles:
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
-
-# ==============================================================================
-# Stage 2: Minimal Distroless / Hardened Runtime
-# ==============================================================================
-FROM python:3.11-slim AS runtime
-
-WORKDIR /app
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PATH="/home/appuser/.local/bin:${PATH}"
-
-# Create unprivileged application user
-RUN useradd --create-home --shell /bin/bash appuser
-
-# Copy installed Python packages from builder
-COPY --from=builder /root/.local /home/appuser/.local
-
-# Copy application source code
-COPY --chown=appuser:appuser fs_tools.py .
-COPY --chown=appuser:appuser llm_file_assistant.py .
-COPY --chown=appuser:appuser demo.py .
-COPY --chown=appuser:appuser resumes/ ./resumes/
-
-# Create destination summaries folder with proper ownership
-RUN mkdir -p /app/summaries && chown -R appuser:appuser /app
-
-USER appuser
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD python -c "import fs_tools; exit(0)" || exit 1
-
-ENTRYPOINT ["python", "llm_file_assistant.py"]
-CMD ["--interactive"]
-```
-
-### 3.2 `docker-compose.yml` for Local Orchestration
-```yaml
-version: '3.8'
-
-services:
-  file-assistant:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: llm_file_assistant
-    restart: unless-stopped
-    stdin_open: true # Enables interactive terminal mode
-    tty: true
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
-      - GROQ_API_KEY=${GROQ_API_KEY}
-    volumes:
-      - ./resumes:/app/resumes:ro     # Mount inbound resumes as read-only
-      - ./summaries:/app/summaries    # Persist generated summaries to host
-```
-
-### 3.3 Building and Running with Docker
 ```bash
-# Build the container image
-docker build -t llm-file-assistant:latest .
+# 1. Interactive assistant (default service)
+docker compose run --rm assistant
 
-# Run single query inside container
-docker run --rm \
-  -e OPENAI_API_KEY="sk-..." \
-  -v "$(pwd)/summaries:/app/summaries" \
-  llm-file-assistant:latest "Create a summary file for resume_john_doe.pdf"
+# 2. Single CLI query inside container
+docker compose run --rm assistant "Create a summary file for resume_john_doe.pdf"
 
-# Run interactive REPL session with Docker Compose
-docker compose run --rm file-assistant
+# 3. Automated benchmark demo
+docker compose --profile demo run --rm demo
+
+# 4. HTTP API server on http://localhost:8000 (/health and /query)
+docker compose --profile api up -d
 ```
 
----
-
-## 4. Cloud Production Deployment (AWS ECS Fargate)
-
-### 4.1 ECS Task Definition (`task-definition.json`)
-```json
-{
-  "family": "llm-fs-assistant-prod",
-  "networkMode": "awsvpc",
-  "requiresCompatibilities": ["FARGATE"],
-  "cpu": "512",
-  "memory": "1024",
-  "executionRoleArn": "arn:aws:iam::123456789012:role/ecsTaskExecutionRole",
-  "taskRoleArn": "arn:aws:iam::123456789012:role/llm-fs-assistant-task-role-prod",
-  "containerDefinitions": [
-    {
-      "name": "assistant",
-      "image": "123456789012.dkr.ecr.us-east-1.amazonaws.com/llm-fs-assistant:latest",
-      "essential": true,
-      "secrets": [
-        {
-          "name": "OPENAI_API_KEY",
-          "valueFrom": "arn:aws:secretsmanager:us-east-1:123456789012:secret:llm-fs-assistant/llm-keys-prod:OPENAI_API_KEY::"
-        }
-      ],
-      "environment": [
-        {"name": "OPENAI_MODEL", "value": "gpt-4o-mini"}
-      ],
-      "logConfiguration": {
-        "logDriver": "awslogs",
-        "options": {
-          "awslogs-group": "/ecs/llm-fs-assistant-prod",
-          "awslogs-region": "us-east-1",
-          "awslogs-stream-prefix": "ecs"
-        }
-      }
-    }
-  ]
-}
-```
-
-### 4.2 Rolling Update Deployment Procedure
+Test the HTTP API service:
 ```bash
-# Register new task definition revision
-aws ecs register-task-definition --cli-input-json file://task-definition.json
-
-# Update ECS Service with zero-downtime rolling update
-aws ecs update-service \
-  --cluster prod-cluster \
-  --service llm-assistant-service \
-  --task-definition llm-fs-assistant-prod \
-  --force-new-deployment
+curl http://localhost:8000/health
+curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Find resumes mentioning Python experience"}'
 ```
 
 ---
 
-## 5. Troubleshooting Guide
+## 4. Cloud Production Deployment (AWS ECS Fargate via Terraform)
+
+The modular Terraform configuration in `infra/terraform/` provisions VPC networking, S3 storage, Secrets Manager, ECS Fargate + ALB, and CloudWatch alarms.
+
+```bash
+cd infra/terraform
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your image URI, environment, and region
+
+terraform init
+terraform plan -out=tfplan
+terraform apply tfplan
+```
+
+Populate production LLM API keys into AWS Secrets Manager after creation:
+```bash
+aws secretsmanager put-secret-value \
+  --secret-id "llm-fs-assistant-dev-llm-api-keys" \
+  --secret-string '{"OPENAI_API_KEY":"sk-...","ANTHROPIC_API_KEY":"sk-ant-...","GROQ_API_KEY":"gsk_..."}'
+```
+
+For full details on remote state locking and variable tuning, see [`infra/terraform/TERRAFORM_GUIDE.md`](../infra/terraform/TERRAFORM_GUIDE.md).
+
+---
+
+## 5. Troubleshooting Matrix
 
 | Issue / Symptom | Root Cause | Diagnostic Step | Resolution |
 | :--- | :--- | :--- | :--- |
-| **"No OPENAI_API_KEY found. Falling back to Mock engine."** | Environment variable missing or `.env` not present | Run `python -c "import os; print(os.getenv('OPENAI_API_KEY'))"` | Export key in shell or create `.env` file with `OPENAI_API_KEY=sk-...`. |
-| **"pypdf is required to parse PDF files."** | `pypdf` dependency is not installed | Run `python -c "import pypdf"` | Run `pip install pypdf>=5.0.0` or `pip install -r requirements.txt`. |
-| **"Permission denied writing to 'summaries/...' "** | Process lacks write permissions on destination directory | Inspect filesystem permissions: `ls -ld summaries/` | Adjust write permissions (`chmod -R 775 summaries/`) or run container as non-root user with write ownership. |
-| **"RateLimitError (429) from LLM provider"** | API quota exceeded or concurrency limit hit | Inspect API usage dashboard | Switch to fallback provider (`--provider groq` or `--provider mock`) or set up backoff retries. |
-| **"Tool iteration limit reached"** | Model looped without producing terminal natural language response | Run with `--verbose` to inspect `[Tool Call]` traces | Refine user query to be more specific or increase `max_iterations` in `assistant.run()`. |
-| **Encoding errors reading legacy TXT files** | Character encoding incompatible with standard UTF-8 | Check file encoding | `fs_tools._read_txt` automatically falls back through `utf-8`, `utf-8-sig`, `latin-1`, and `cp1252`. |
+| **"No OPENAI_API_KEY found. Falling back to Mock engine."** | API key not set in env or `.env` | Check `env` or `.env` file | Set `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GROQ_API_KEY` in `.env` / Secrets Manager. |
+| **"pypdf is required to parse PDF files."** | Missing dependency | `python -c "import pypdf"` | Install via `pip install -r requirements.txt`. |
+| **"Permission denied writing to 'summaries/...'"** | Host volume permissions mismatch with UID `10001` | Inspect permissions on `./summaries` | Ensure host `./summaries` is writable or run `chmod -R 775 summaries/`. |
+| **"RateLimitError (429) from LLM provider"** | Provider quota exceeded | Inspect provider dashboard | Switch `--provider groq` / `--provider anthropic` / `--provider mock`. |
+| **Encoding issues reading TXT files** | Legacy Windows/ISO-8859-1 file | Inspect file bytes | `fs_tools._read_txt` automatically retries `utf-8`, `utf-8-sig`, `latin-1`, and `cp1252`. |

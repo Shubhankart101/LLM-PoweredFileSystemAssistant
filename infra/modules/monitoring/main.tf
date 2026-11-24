@@ -1,16 +1,7 @@
-resource "aws_cloudwatch_log_group" "this" {
-  name              = "/ecs/${var.app_name}-${var.environment}"
-  retention_in_days = var.log_retention_days
-
-  tags = merge(var.tags, {
-    Name = "${var.app_name}-${var.environment}-logs"
-  })
-}
-
 resource "aws_cloudwatch_log_metric_filter" "app_errors" {
   name           = "${var.app_name}-${var.environment}-app-errors"
   pattern        = "?ERROR ?CRITICAL ?Exception ?failed"
-  log_group_name = aws_cloudwatch_log_group.this.name
+  log_group_name = var.log_group_name
 
   metric_transformation {
     name          = "ApplicationErrorCount"
@@ -26,10 +17,10 @@ resource "aws_cloudwatch_metric_alarm" "error_spike" {
   evaluation_periods  = 2
   metric_name         = "ApplicationErrorCount"
   namespace           = "LLMAssistant/${var.environment}"
-  period              = 60
+  period              = 300
   statistic           = "Sum"
-  threshold           = 5
-  alarm_description   = "Triggered when LLM File Assistant logs 5+ errors across 2 consecutive minutes."
+  threshold           = var.alarm_error_count_threshold
+  alarm_description   = "Triggered when LLM File Assistant logs errors above threshold."
 
   tags = var.tags
 }
@@ -42,8 +33,8 @@ resource "aws_cloudwatch_metric_alarm" "ecs_high_cpu" {
   namespace           = "AWS/ECS"
   period              = 60
   statistic           = "Average"
-  threshold           = 80
-  alarm_description   = "Triggers when ECS CPU utilization exceeds 80% for 3 consecutive minutes."
+  threshold           = var.alarm_cpu_threshold
+  alarm_description   = "Triggers when ECS CPU utilization exceeds threshold."
 
   dimensions = {
     ClusterName = var.ecs_cluster_name
@@ -61,8 +52,8 @@ resource "aws_cloudwatch_metric_alarm" "ecs_high_memory" {
   namespace           = "AWS/ECS"
   period              = 60
   statistic           = "Average"
-  threshold           = 85
-  alarm_description   = "Triggers when ECS memory utilization exceeds 85% for 3 consecutive minutes."
+  threshold           = var.alarm_memory_threshold
+  alarm_description   = "Triggers when ECS memory utilization exceeds threshold."
 
   dimensions = {
     ClusterName = var.ecs_cluster_name

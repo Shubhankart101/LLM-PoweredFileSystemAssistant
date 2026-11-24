@@ -18,12 +18,12 @@ app_name     = "llm-fs-assistant"
 # ------------------------------------------------------------------------------
 # 2. Container & Compute Configuration
 # ------------------------------------------------------------------------------
-container_image   = "123456789012.dkr.ecr.us-east-1.amazonaws.com/llm-fs-assistant:v1.0.0"
+container_image   = "ghcr.io/shubhankart101/llm-poweredfilesystemassistant:latest"
 container_port    = 8000
 cpu               = 512                # 256 (.25 vCPU), 512 (.5 vCPU), 1024 (1 vCPU), 2048 (2 vCPU)
 memory            = 1024               # 512, 1024, 2048, 4096 (MB)
 desired_count     = 1                  # Increase for production (e.g., 2 or 4)
-health_check_path = "/"
+health_check_path = "/health"
 
 # ------------------------------------------------------------------------------
 # 3. Networking Configuration

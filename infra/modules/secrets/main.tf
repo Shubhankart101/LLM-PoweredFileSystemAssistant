@@ -1,7 +1,7 @@
 resource "aws_secretsmanager_secret" "this" {
   name                    = "${var.app_name}-${var.environment}-llm-api-keys"
   description             = "LLM API keys for OpenAI, Anthropic, and Groq"
-  recovery_window_in_days = var.environment == "prod" ? 30 : 0
+  recovery_window_in_days = var.recovery_window_days
 
   tags = merge(var.tags, {
     Name = "${var.app_name}-${var.environment}-secrets"

@@ -23,11 +23,9 @@ This module implements structured tools for interacting with files and directori
 
 from __future__ import annotations
 
-import os
-import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 
 def _format_datetime(ts: float) -> str:
@@ -85,9 +83,15 @@ def _read_pdf(path: Path) -> tuple[str, dict[str, Any]]:
         "page_count": len(reader.pages),
         "word_count": len(full_text.split()),
         "character_count": len(full_text),
-        "author": getattr(pdf_meta, "author", None) or str(pdf_meta.get("/Author", "")) or None,
-        "title": getattr(pdf_meta, "title", None) or str(pdf_meta.get("/Title", "")) or None,
-        "producer": getattr(pdf_meta, "producer", None) or str(pdf_meta.get("/Producer", "")) or None,
+        "author": getattr(pdf_meta, "author", None)
+        or str(pdf_meta.get("/Author", ""))
+        or None,
+        "title": getattr(pdf_meta, "title", None)
+        or str(pdf_meta.get("/Title", ""))
+        or None,
+        "producer": getattr(pdf_meta, "producer", None)
+        or str(pdf_meta.get("/Producer", ""))
+        or None,
     }
     return full_text, metadata
 
@@ -108,7 +112,9 @@ def _read_docx(path: Path) -> tuple[str, dict[str, Any]]:
     table_texts: list[str] = []
     for table in doc.tables:
         for row in table.rows:
-            row_str = " | ".join(cell.text.strip() for cell in row.cells if cell.text.strip())
+            row_str = " | ".join(
+                cell.text.strip() for cell in row.cells if cell.text.strip()
+            )
             if row_str:
                 table_texts.append(row_str)
 
@@ -268,16 +274,18 @@ def list_files(directory: str, extension: Optional[str] = None) -> list[dict[str
                     continue
 
                 stat = entry.stat()
-                results.append({
-                    "name": entry.name,
-                    "size": stat.st_size,
-                    "size_bytes": stat.st_size,
-                    "size_kb": round(stat.st_size / 1024, 2),
-                    "modified_date": _format_datetime(stat.st_mtime),
-                    "modified_time": _format_datetime(stat.st_mtime),
-                    "filepath": str(entry.resolve()),
-                    "extension": entry.suffix.lower(),
-                })
+                results.append(
+                    {
+                        "name": entry.name,
+                        "size": stat.st_size,
+                        "size_bytes": stat.st_size,
+                        "size_kb": round(stat.st_size / 1024, 2),
+                        "modified_date": _format_datetime(stat.st_mtime),
+                        "modified_time": _format_datetime(stat.st_mtime),
+                        "filepath": str(entry.resolve()),
+                        "extension": entry.suffix.lower(),
+                    }
+                )
     except Exception:
         return []
 
@@ -395,12 +403,14 @@ def search_in_file(
             end_idx = min(len(lines), idx + context_lines + 1)
             context_snippet = "\n".join(lines[start_idx:end_idx])
 
-            matches.append({
-                "line_number": idx + 1,
-                "line_content": line.strip(),
-                "line_text": line.strip(),
-                "context": context_snippet.strip(),
-            })
+            matches.append(
+                {
+                    "line_number": idx + 1,
+                    "line_content": line.strip(),
+                    "line_text": line.strip(),
+                    "context": context_snippet.strip(),
+                }
+            )
 
     return {
         "success": True,

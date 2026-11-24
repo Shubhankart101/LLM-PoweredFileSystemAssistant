@@ -54,7 +54,7 @@ variable "enable_nat_gateway" {
 variable "container_image" {
   type        = string
   description = "Docker container image URI for the LLM File System Assistant."
-  default     = "ghcr.io/username/llm-file-system-assistant:latest"
+  default     = "ghcr.io/shubhankart101/llm-poweredfilesystemassistant:latest"
 }
 
 variable "container_port" {
@@ -89,7 +89,7 @@ variable "desired_count" {
 variable "health_check_path" {
   type        = string
   description = "HTTP health check endpoint path on the container."
-  default     = "/"
+  default     = "/health"
 }
 
 variable "log_retention_days" {

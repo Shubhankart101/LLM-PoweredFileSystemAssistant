@@ -14,6 +14,12 @@ variable "bucket_prefix" {
   default     = "llm-assistant"
 }
 
+variable "versioning_enabled" {
+  description = "Enable S3 bucket object versioning"
+  type        = bool
+  default     = true
+}
+
 variable "tags" {
   description = "Resource tags"
   type        = map(string)

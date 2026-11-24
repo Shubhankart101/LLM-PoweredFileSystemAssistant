@@ -34,23 +34,29 @@ module "vpc" {
   public_subnet_cidrs  = var.public_subnet_cidrs
   private_subnet_cidrs = var.private_subnet_cidrs
   enable_nat_gateway   = var.enable_nat_gateway
+  container_port       = var.container_port
+  tags                 = var.tags
 }
 
 # 2. S3 Storage Module
 module "s3" {
   source = "../modules/s3"
 
-  app_name      = var.app_name
-  environment   = var.environment
-  bucket_prefix = var.app_name
+  app_name           = var.app_name
+  environment        = var.environment
+  bucket_prefix      = var.app_name
+  versioning_enabled = var.s3_versioning_enabled
+  tags               = var.tags
 }
 
 # 3. Secrets Management Module
 module "secrets" {
   source = "../modules/secrets"
 
-  app_name    = var.app_name
-  environment = var.environment
+  app_name             = var.app_name
+  environment          = var.environment
+  recovery_window_days = var.secret_recovery_window_days
+  tags                 = var.tags
 }
 
 # 4. ECS Fargate Compute & Load Balancing Module
@@ -70,20 +76,26 @@ module "ecs" {
   cpu                   = var.cpu
   memory                = var.memory
   desired_count         = var.desired_count
+  health_check_path     = var.health_check_path
+  log_retention_days    = var.log_retention_days
   s3_bucket_arn         = module.s3.bucket_arn
   secrets_arn           = module.secrets.secret_arn
-  log_group_name        = "/ecs/${var.app_name}-${var.environment}"
+  tags                  = var.tags
 }
 
 # 5. Monitoring & Alarms Module
 module "monitoring" {
   source = "../modules/monitoring"
 
-  app_name                = var.app_name
-  environment             = var.environment
-  log_retention_days      = var.log_retention_days
-  ecs_cluster_name        = module.ecs.cluster_name
-  ecs_service_name        = module.ecs.service_name
-  target_group_arn_suffix = module.ecs.target_group_arn_suffix
-  alb_arn_suffix          = module.ecs.alb_arn_suffix
+  app_name                    = var.app_name
+  environment                 = var.environment
+  log_group_name              = module.ecs.log_group_name
+  ecs_cluster_name            = module.ecs.cluster_name
+  ecs_service_name            = module.ecs.service_name
+  target_group_arn_suffix     = module.ecs.target_group_arn_suffix
+  alb_arn_suffix              = module.ecs.alb_arn_suffix
+  alarm_cpu_threshold         = var.alarm_cpu_threshold
+  alarm_memory_threshold      = var.alarm_memory_threshold
+  alarm_error_count_threshold = var.alarm_error_count_threshold
+  tags                        = var.tags
 }

@@ -8,10 +8,11 @@ Covers:
 - search_in_file (case-insensitivity, context window, line_content, non-matches, empty keywords)
 """
 
-import os
 import shutil
 from pathlib import Path
+
 import pytest
+
 import fs_tools
 
 TEST_DIR = Path(__file__).resolve().parent / "temp_test_sandbox"

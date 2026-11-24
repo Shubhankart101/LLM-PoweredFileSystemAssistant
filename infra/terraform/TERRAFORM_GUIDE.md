@@ -16,7 +16,7 @@ flowchart TD
     subgraph AWS["AWS Cloud (us-east-1)"]
         subgraph VPC["Dedicated Application VPC (10.0.0.0/16)"]
             subgraph PublicSubnets["Multi-AZ Public Subnets"]
-                ALB["⚖️ Application Load Balancer (ALB)<br/>Port 80 -> Health Check (/)"]
+                ALB["⚖️ Application Load Balancer (ALB)<br/>Port 80 -> Health Check (/health)"]
                 IGW["🌐 Internet Gateway"]
             end
 
@@ -126,7 +126,7 @@ terraform apply tfplan
 After provisioning, set your actual production LLM keys in AWS Secrets Manager:
 ```bash
 aws secretsmanager put-secret-value \
-  --secret-id "llm-fs-assistant/dev/llm-api-keys" \
+  --secret-id "llm-fs-assistant-dev-llm-api-keys" \
   --secret-string '{"OPENAI_API_KEY":"sk-...","ANTHROPIC_API_KEY":"sk-ant-...","GROQ_API_KEY":"gsk_..."}'
 ```
 

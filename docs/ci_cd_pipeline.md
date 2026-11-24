@@ -1,278 +1,94 @@
 # 🚀 CI/CD Pipeline & DevOps Automation
 
-This document outlines the Continuous Integration and Continuous Delivery (CI/CD) architecture for the **LLM-Powered File System Assistant** built using **GitHub Actions**. It defines automated quality assurance, vulnerability scanning, multi-stage Docker builds, and progressive deployment gates.
+This document describes the automated Continuous Integration and Security pipelines configured under `.github/workflows/` for the **LLM-Powered File System Assistant**.
 
 ---
 
-## 1. CI/CD Pipeline Workflow Diagram
+## 1. Pipeline Architecture Diagram
 
 ```mermaid
-flowchart TD
-    subgraph Trigger["🎯 Triggers"]
-        PR[Pull Request to main]
-        Push[Push to main / tags]
+flowchart LR
+    subgraph Triggers["Triggers"]
+        Push["Push (main / master / develop)"]
+        PR["Pull Request (main / master)"]
+        Tag["Release Tag (v*.*.*)"]
+        Cron["Weekly Schedule (Mon 06:00 UTC)"]
     end
 
-    subgraph CI["Stage 1: Continuous Integration (ci.yml)"]
-        direction TB
-        Lint["🧹 Linting & Formatting\n(flake8, black, isort, mypy)"]
-        Test["🧪 Automated Testing\n(pytest 24/24 tests + coverage)"]
-        Security["🛡️ Security Scanners\n(Bandit AST + pip-audit + Trivy)"]
-        
-        Lint --> Test --> Security
+    subgraph CICD[".github/workflows/ci-cd.yml"]
+        Lint["1. lint-and-format<br/>black, isort, flake8"]
+        Test["2. test-matrix<br/>Python 3.10, 3.11, 3.12<br/>pytest + coverage.xml"]
+        SecAudit["3. security-audit<br/>pip-audit + bandit"]
+        TFVal["4. infrastructure-validation<br/>terraform fmt -recursive & validate"]
+        Docker["5. docker-build-push<br/>Buildx (amd64/arm64) -> GHCR"]
+
+        Lint --> Test & SecAudit
+        Test & SecAudit & TFVal --> Docker
     end
 
-    subgraph CD["Stage 2: Continuous Delivery (cd.yml)"]
-        direction TB
-        Build["🐳 Multi-Arch Docker Build\n(linux/amd64, linux/arm64)"]
-        PushECR["📦 Push Image to Amazon ECR\n(OIDC Authentication)"]
-        DeployStaging["🚀 Deploy to Staging Environment"]
-        SmokeTest["🔎 Run Staging Smoke Verification"]
-        Approval{"🛑 Production Approval Gate\n(Environment Protection)"}
-        DeployProd["🚢 Deploy to Production Cluster"]
-        
-        Build --> PushECR --> DeployStaging --> SmokeTest --> Approval --> DeployProd
+    subgraph SecScan[".github/workflows/security-scan.yml"]
+        CodeQL["CodeQL SAST (Python)"]
+        DepRev["Dependency Review (PR only)"]
+        Trivy["Trivy FS & Config Scanner (SARIF)"]
     end
 
-    PR --> CI
-    Push --> CI
-    CI -->|"Passes All Checks"| CD
+    Push & PR & Tag --> CICD
+    Push & PR & Cron --> SecScan
 ```
 
 ---
 
-## 2. Pipeline Stages Breakdown
+## 2. Workflow Breakdown
 
-| Stage | Tools / Commands | Objective | Failure Condition |
+### 2.1 Main CI/CD Pipeline (`.github/workflows/ci-cd.yml`)
+
+| Job | Runner | Tools & Actions | Failure Condition |
 | :--- | :--- | :--- | :--- |
-| **Lint & Format** | `black --check`, `flake8`, `isort --check`, `mypy` | Enforce PEP 8 style standards, import ordering, and type safety | Any syntax error, formatting drift, or untyped violation |
-| **Unit & Integration Tests** | `pytest --cov=fs_tools --cov=llm_file_assistant` | Validate all 24 unit and integration test assertions | Any failing test assertion or coverage $< 90\%$ |
-| **Security & SAST** | `bandit -r .`, `pip-audit`, `trivy fs` | Static application security testing and dependency vulnerability scanning | Any High or Critical CVE |
-| **Container Build** | `docker/build-push-action@v5` | Produce immutable, minimal container image using multi-stage build | Build failure or unhandled layer error |
-| **Staging Deployment** | AWS ECS Fargate deployment via AWS CLI / Terraform | Roll out changes to staging cluster | ECS service task fails to reach steady state |
-| **Staging Verification** | `python demo.py --auto` in test container | Ensure live tool execution passes end-to-end | Any demo query failure |
-| **Production Gate** | GitHub Environment Manual Approval | Enforce human-in-the-loop sign-off before production traffic shift | Rejection or timeout |
-| **Production Deploy** | Rolling update via ECS task definition revision | Deploy to zero-downtime production cluster | Health check probes fail during rollout |
+| **`lint-and-format`** | `ubuntu-latest` | `black --check --diff .`, `isort --check-only --diff .`, `flake8` | Formatting drift, import disorder, syntax errors, or complexity $> 15$ |
+| **`test-matrix`** | `ubuntu-latest` | `pytest --cov=. --cov-report=xml` across Python `3.10`, `3.11`, `3.12` | Any failing test case in `tests/` (27 total) |
+| **`security-audit`** | `ubuntu-latest` | `pip-audit -r requirements.txt`, `bandit -r . -x ./tests,./.venv,./venv -ll` | Known dependency CVEs or Medium/High Bandit SAST findings |
+| **`infrastructure-validation`** | `ubuntu-latest` | `hashicorp/setup-terraform@v3` (`1.9.8`), `terraform fmt -check -diff -recursive infra/`, `terraform -chdir=infra/terraform init -backend=false`, `validate` | HCL formatting drift or invalid Terraform module references |
+| **`docker-build-push`** | `ubuntu-latest` | `docker/setup-qemu-action@v3`, `docker/setup-buildx-action@v3`, `docker/metadata-action@v5`, `docker/login-action@v3`, `docker/build-push-action@v6` | Multi-stage Docker build error; pushes to `ghcr.io/${{ github.repository }}` on `main` or `v*.*.*` tags |
 
 ---
 
-## 3. GitHub Actions Workflow Specifications
+### 2.2 Security & CodeQL Scanning (`.github/workflows/security-scan.yml`)
 
-### 3.1 Continuous Integration Workflow (`.github/workflows/ci.yml`)
+| Job | Trigger | Tools & Actions | Output / Integration |
+| :--- | :--- | :--- | :--- |
+| **`codeql-analysis`** | Push, PR, Weekly Cron | `github/codeql-action/init@v3` & `analyze@v3` (`security-extended,security-and-quality`) | Uploads Python SAST findings to GitHub Security tab |
+| **`dependency-review`** | Pull Request | `actions/dependency-review-action@v4` (`fail-on-severity: high`) | Blocks PRs introducing High/Critical dependency vulnerabilities |
+| **`trivy-scan`** | Push, PR, Weekly Cron | `aquasecurity/trivy-action@v0.36.0` (`scan-type: fs`, `severity: CRITICAL,HIGH`) + `upload-sarif@v3` | Scans filesystem, Dockerfile, and Terraform configs; uploads `trivy-results.sarif` |
 
-```yaml
-name: CI Pipeline
+---
 
-on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
+## 3. Caching & Optimization Strategy
 
-jobs:
-  code-quality:
-    name: Code Quality & Linting
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
+1. **Python Pip Caching**:
+   - `actions/setup-python@v5` with `cache: 'pip'` caches downloaded wheels keyed by `requirements.txt`.
+2. **Docker Buildx Layer Caching**:
+   - `cache-from: type=gha` and `cache-to: type=gha,mode=max` persist intermediate `python:3.12-slim` virtual environment layers across workflow runs.
+3. **Concurrency Control**:
+   - In-progress PR runs on the same branch are automatically cancelled (`cancel-in-progress: ${{ github.event_name == 'pull_request' }}`) to avoid wasted runner minutes.
 
-      - name: Setup Python Runtime
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
+---
 
-      - name: Install Linting Tools
-        run: |
-          python -m pip install --upgrade pip
-          pip install flake8 black isort mypy
+## 4. Running CI Checks Locally Before Pushing
 
-      - name: Check Formatting with Black
-        run: black --check --line-length 100 fs_tools.py llm_file_assistant.py demo.py
+```bash
+# 1. Format & Lint
+isort . && black .
+flake8 . --count --max-complexity=15 --max-line-length=127 --statistics
 
-      - name: Check Import Sorting with isort
-        run: isort --check-only fs_tools.py llm_file_assistant.py demo.py
+# 2. Tests & Coverage
+pytest --cov=. --cov-report=term-missing tests/
 
-      - name: Lint with Flake8
-        run: flake8 fs_tools.py llm_file_assistant.py demo.py --max-line-length=120 --ignore=E203,W503
+# 3. Security Scans
+bandit -r . -x ./tests,./.venv,./venv -ll
+pip-audit -r requirements.txt
 
-      - name: Static Type Checking with Mypy
-        run: mypy fs_tools.py llm_file_assistant.py --ignore-missing-imports
-
-  test-suite:
-    name: Test Suite & Coverage
-    runs-on: ubuntu-latest
-    needs: code-quality
-    steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest-cov
-
-      - name: Execute Pytest Suite
-        run: |
-          pytest --cov=fs_tools --cov=llm_file_assistant --cov-report=xml --cov-report=term-missing tests/
-
-      - name: Upload Coverage Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: code-coverage-report
-          path: coverage.xml
-
-  security-scan:
-    name: SAST & Vulnerability Scanning
-    runs-on: ubuntu-latest
-    needs: code-quality
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-
-      - name: Install Security Scanners
-        run: |
-          python -m pip install --upgrade pip
-          pip install bandit pip-audit
-
-      - name: Run Bandit AST Security Scan
-        run: bandit -r fs_tools.py llm_file_assistant.py -ll
-
-      - name: Audit Dependencies for Known Vulnerabilities
-        run: pip-audit -r requirements.txt
-
-      - name: Run Trivy File System Scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          severity: 'CRITICAL,HIGH'
-          exit-code: '1'
+# 4. Terraform Validation
+terraform fmt -check -diff -recursive infra/
+terraform -chdir=infra/terraform init -backend=false
+terraform -chdir=infra/terraform validate
 ```
-
----
-
-### 3.2 Continuous Delivery Workflow (`.github/workflows/cd.yml`)
-
-```yaml
-name: CD Delivery Pipeline
-
-on:
-  push:
-    branches: [ main ]
-    tags: [ 'v*.*.*' ]
-
-permissions:
-  id-token: write   # Required for AWS OIDC authentication
-  contents: read
-
-jobs:
-  build-and-push-container:
-    name: Build & Push Docker Image
-    runs-on: ubuntu-latest
-    outputs:
-      image_tag: ${{ steps.meta.outputs.tags }}
-    steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU for Multi-Arch Builds
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Configure AWS Credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::123456789012:role/GitHubActionsECRPushRole
-          aws-region: us-east-1
-
-      - name: Log in to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Extract Docker Metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ steps.login-ecr.outputs.registry }}/llm-fs-assistant
-          tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=sha,format=short
-
-      - name: Build and Push Docker Image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  deploy-staging:
-    name: Deploy to Staging
-    runs-on: ubuntu-latest
-    needs: build-and-push-container
-    environment: staging
-    steps:
-      - name: Deploy Task Definition to ECS Staging
-        run: |
-          echo "Updating ECS service in staging with new image tag..."
-          # aws ecs update-service --cluster staging-cluster --service llm-assistant-staging --force-new-deployment
-
-      - name: Run Staging Smoke Verification
-        run: |
-          echo "Executing automated smoke test suite against staging cluster..."
-
-  deploy-production:
-    name: Deploy to Production
-    runs-on: ubuntu-latest
-    needs: deploy-staging
-    environment:
-      name: production
-      url: https://assistant.internal.domain.com
-    steps:
-      - name: Production Rolling Update
-        run: |
-          echo "Applying rolling deployment to production ECS cluster..."
-          # aws ecs update-service --cluster prod-cluster --service llm-assistant-prod --force-new-deployment
-```
-
----
-
-## 4. Caching & Optimization Strategy
-
-1. **Python Dependencies (`pip cache`)**:
-   - `actions/setup-python@v5` caches `~/.cache/pip` keyed on `requirements.txt` hashes.
-   - Reduces dependency resolution time from 45 seconds to under 4 seconds.
-2. **Docker Layer Caching (`type=gha`)**:
-   - Docker Buildx exports image layers directly into GitHub Actions storage cache.
-   - Base runtime layers (`python:3.11-slim`) and installed system wheels are cached across pipeline runs.
-
----
-
-## 5. Security & Rollback Architecture
-
-### 5.1 OIDC Passwordless Authentication
-The deployment pipeline uses AWS OpenID Connect (OIDC). No long-lived AWS Access Keys are stored in GitHub Secrets. Ephemeral STS tokens are requested per job with short 15-minute expirations.
-
-### 5.2 Automated Canary Rollback
-If CloudWatch alarms detect a rise in error rate ($> 1\%$ 5xx or unhandled tool failures) within 10 minutes of deployment, AWS CodeDeploy triggers an automatic rollback to the previous task definition revision.

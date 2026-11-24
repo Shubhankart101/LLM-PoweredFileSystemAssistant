@@ -33,9 +33,9 @@ FROM python:3.12-slim AS runner
 # OpenContainer Initiative (OCI) Metadata Labels
 LABEL org.opencontainers.image.title="LLM-Powered File System Assistant" \
       org.opencontainers.image.description="Multi-model autonomous file system and resume screening assistant with tool calling" \
-      org.opencontainers.image.authors="DeepMind Engineering" \
-      org.opencontainers.image.licenses="Apache-2.0" \
-      org.opencontainers.image.source="https://github.com/example/LLM-PoweredFileSystemAssistant"
+      org.opencontainers.image.authors="Shubhankar Thapliyal" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.source="https://github.com/Shubhankart101/LLM-PoweredFileSystemAssistant"
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -70,6 +70,9 @@ USER appuser
 # Healthcheck to verify Python runtime, dependencies, and core modules
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import fs_tools; import llm_file_assistant; print('healthy')" || exit 1
+
+# Expose HTTP server port for --serve mode (used in cloud/ECS deployments)
+EXPOSE 8000
 
 # Expose document storage volumes for external persistence
 VOLUME ["/app/resumes", "/app/summaries"]

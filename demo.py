@@ -46,7 +46,9 @@ def run_demo(auto_mode: bool = False, provider: str = "auto"):
     print_banner("LLM-POWERED FILE SYSTEM ASSISTANT - LIVE DEMO", character="*")
     print("This demo walks through all assignment deliverables and requirements:")
     print("  • Part A: Core File System Tools (fs_tools.py) - PDF, DOCX, TXT")
-    print("  • Part B: LLM Integration & Autonomous Tool Calling (llm_file_assistant.py)")
+    print(
+        "  • Part B: LLM Integration & Autonomous Tool Calling (llm_file_assistant.py)"
+    )
     print("  • Sample Data: 8 Diverse Candidate Resumes in 'resumes/'")
 
     pause_prompt(auto_mode, "Press Enter to start Part A (Core Tools Inspection)...")
@@ -61,23 +63,40 @@ def run_demo(auto_mode: bool = False, provider: str = "auto"):
     files = fs_tools.list_files("resumes")
     print(f"   Found {len(files)} candidate resumes:")
     for f in files:
-        print(f"   - {f['name']:<25} | Format: {f['extension'].upper():<5} | Size: {f['size_kb']} KB | Modified: {f['modified_time']}")
+        print(
+            f"   - {f['name']:<25} | Format: {f['extension'].upper():<5} "
+            f"| Size: {f['size_kb']} KB | Modified: {f['modified_time']}"
+        )
 
     # 2. read_file (PDF, DOCX, TXT)
-    pause_prompt(auto_mode, "Press Enter to test read_file across PDF, DOCX, and TXT formats...")
+    pause_prompt(
+        auto_mode, "Press Enter to test read_file across PDF, DOCX, and TXT formats..."
+    )
     print("2. [Tool: read_file] Extracting text & metadata across 3 formats:")
 
-    for sample in ["resume_john_doe.pdf", "resume_bob_kumar.docx", "resume_david_wilson.txt"]:
+    for sample in [
+        "resume_john_doe.pdf",
+        "resume_bob_kumar.docx",
+        "resume_david_wilson.txt",
+    ]:
         res = fs_tools.read_file(f"resumes/{sample}")
         print(f"\n   📄 File: {sample}")
-        print(f"      Success: {res['success']} | Format: {res['extension']} | Words: {res['metadata'].get('word_count')}")
-        meta_str = ", ".join(f"{k}: {v}" for k, v in res["metadata"].items() if k not in ("size_bytes", "word_count"))
+        print(
+            f"      Success: {res['success']} | Format: {res['extension']} | Words: {res['metadata'].get('word_count')}"
+        )
+        meta_str = ", ".join(
+            f"{k}: {v}"
+            for k, v in res["metadata"].items()
+            if k not in ("size_bytes", "word_count")
+        )
         print(f"      Metadata: {meta_str}")
         first_line = res["content"].strip().splitlines()[0]
         print(f"      Header Preview: '{first_line[:75]}...'")
 
     # 3. search_in_file
-    pause_prompt(auto_mode, "Press Enter to test search_in_file with keyword context...")
+    pause_prompt(
+        auto_mode, "Press Enter to test search_in_file with keyword context..."
+    )
     print("3. [Tool: search_in_file] Case-insensitive keyword search for 'FastAPI'...")
     search_res = fs_tools.search_in_file("resumes/resume_john_doe.pdf", "fastapi")
     print(f"   Matches found: {search_res['matches_count']}")
@@ -91,17 +110,25 @@ def run_demo(auto_mode: bool = False, provider: str = "auto"):
     print_banner("PART B: LLM TOOL CALLING IN ACTION (llm_file_assistant.py)")
 
     assistant = LLMFileAssistant(provider=provider, verbose=True)
-    print(f"Assistant active using Provider: {assistant.provider.upper()} (Model: {assistant.model})\n")
+    print(
+        f"Assistant active using Provider: {assistant.provider.upper()} (Model: {assistant.model})\n"
+    )
 
     queries = [
         ("Query 1: Directory Exploration", "Read all resumes in the resumes folder"),
-        ("Query 2: Skill-Based Candidate Matching", "Find resumes mentioning Python experience"),
-        ("Query 3: Multi-Step Document Summarization", "Create a summary file for resume_john_doe.pdf"),
+        (
+            "Query 2: Skill-Based Candidate Matching",
+            "Find resumes mentioning Python experience",
+        ),
+        (
+            "Query 3: Multi-Step Document Summarization",
+            "Create a summary file for resume_john_doe.pdf",
+        ),
     ]
 
     for label, query in queries:
         print_banner(label, character="-")
-        print(f"🗣️ User: \"{query}\"\n")
+        print(f'🗣️ User: "{query}"\n')
         print("[Execution Trace]:")
         start_t = time.time()
         result = assistant.run(query)
@@ -109,7 +136,9 @@ def run_demo(auto_mode: bool = False, provider: str = "auto"):
 
         print("\n🤖 Assistant Response:")
         print(result["response"])
-        print(f"\n[Trace Completed: {len(result['tool_calls_executed'])} tool calls executed in {duration}s]")
+        print(
+            f"\n[Trace Completed: {len(result['tool_calls_executed'])} tool calls executed in {duration}s]"
+        )
 
         pause_prompt(auto_mode, "Press Enter to proceed to next query...")
 
@@ -142,8 +171,17 @@ def run_demo(auto_mode: bool = False, provider: str = "auto"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Live Demo for LLM File Assistant")
-    parser.add_argument("--auto", action="store_true", help="Run in continuous automated mode without pausing")
-    parser.add_argument("--provider", default="auto", choices=["auto", "openai", "groq", "mock"], help="LLM provider")
+    parser.add_argument(
+        "--auto",
+        action="store_true",
+        help="Run in continuous automated mode without pausing",
+    )
+    parser.add_argument(
+        "--provider",
+        default="auto",
+        choices=["auto", "openai", "anthropic", "groq", "mock"],
+        help="LLM provider",
+    )
     args = parser.parse_args()
 
     run_demo(auto_mode=args.auto, provider=args.provider)

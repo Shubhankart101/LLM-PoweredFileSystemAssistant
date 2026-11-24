@@ -356,6 +356,18 @@ python llm_file_assistant.py [QUERY...] [OPTIONS]
 | :--- | :--- | :--- | :--- |
 | `QUERY` | - | None | Positional natural language query string to execute |
 | `--interactive` | `-i` | `False` | Launch interactive terminal REPL conversation loop |
+| `--serve` | - | `False` | Launch HTTP API server exposing `GET /health` and `POST /query` |
+| `--host` | - | `127.0.0.1` | Bind host address for `--serve` mode (override with `ASSISTANT_HOST`) |
+| `--port` | - | `8000` | Bind port for `--serve` mode (override with `PORT`) |
 | `--provider` | `-p` | `"auto"` | Select LLM backend: `auto`, `openai`, `anthropic`, `groq`, `mock` |
 | `--model` | `-m` | Auto-detected | Override model name (e.g. `gpt-4o-mini`, `claude-3-5-sonnet-latest`) |
 | `--quiet` | `-q` | `False` | Suppress `[Tool Call]` and `[Tool Result]` execution logs |
+
+---
+
+## 5. HTTP Server Endpoints (`--serve` Mode)
+
+When running `python llm_file_assistant.py --serve --host 0.0.0.0 --port 8000`:
+
+- **`GET /` or `GET /health`**: Returns `200 OK` JSON `{"status": "healthy", "service": "llm-file-system-assistant", "provider": "...", "model": "..."}`.
+- **`POST /query`**: Accepts JSON `{"query": "..."}` and returns `200 OK` with the full `LLMFileAssistant.run()` JSON payload (`400` on invalid/empty input).

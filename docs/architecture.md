@@ -48,6 +48,7 @@ The architecture is cleanly decoupled into five modular layers:
 ### 2.1 Interface & Presentation Layer
 - **CLI Direct Execution** (`python llm_file_assistant.py "<query>"`): Parses CLI arguments, passes single-turn instructions, and formats terminal markdown output.
 - **Interactive REPL** (`python llm_file_assistant.py --interactive`): Maintains a conversational multi-turn session across sequential user queries.
+- **HTTP API Server** (`python llm_file_assistant.py --serve --port 8000`): Exposes `GET /health` (used by Docker/ALB health checks) and `POST /query` JSON endpoints via Python's built-in `ThreadingHTTPServer`.
 - **Guided Demonstration Harness** (`demo.py`): Provides structured evaluation walkthroughs with automated delays, step-by-step pauses, and visual output verification.
 
 ### 2.2 Orchestration Engine (`llm_file_assistant.py`)

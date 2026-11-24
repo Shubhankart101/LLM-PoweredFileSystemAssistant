@@ -72,3 +72,40 @@ services:
         required: false
     entrypoint: ["python", "demo.py"]
     command: ["--auto"]
+
+  # ----------------------------------------------------------------------------
+  # HTTP API Server Mode (Exposes /health and /query on port 8000)
+  # Run with: docker compose --profile api up -d
+  # ----------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    image: llm-file-assistant:latest
+    container_name: llm-file-assistant-api
+    profiles:
+      - api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./resumes:/app/resumes:rw
+      - ./summaries:/app/summaries:rw
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    env_file:
+      - path: .env
+        required: false
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    command: ["--serve", "--host", "0.0.0.0", "--port", "8000"]
