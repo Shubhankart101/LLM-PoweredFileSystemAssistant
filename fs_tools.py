@@ -2,12 +2,23 @@
 fs_tools.py - Core File System Tools for LLM Assistant
 
 This module implements structured tools for interacting with files and directories:
-1. read_file: Reads resume documents (PDF, DOCX, TXT) with content & metadata extraction.
-2. list_files: Lists directory contents with optional extension filtering and metadata.
-3. write_file: Writes content to disk, automatically creating missing directories.
-4. search_in_file: Performs case-insensitive keyword searches with surrounding context.
-
-Designed for standalone programmatic usage and direct LLM function calling integration.
+1. read_file(filepath: str) -> dict
+   - Reads resume files (PDF, TXT, DOCX)
+   - Extracts text content
+   - Returns structured response with content and metadata
+   - Handles errors gracefully
+2. list_files(directory: str, extension: str = None) -> list
+   - Lists all files in a directory
+   - Filters by extension (e.g., .pdf, .txt)
+   - Returns file metadata (name, size, modified date)
+3. write_file(filepath: str, content: str) -> dict
+   - Writes content to file
+   - Creates directories if needed
+   - Returns success/failure status
+4. search_in_file(filepath: str, keyword: str) -> dict
+   - Searches for keywords in file content
+   - Returns matches with context (surrounding text)
+   - Case-insensitive search
 """
 
 from __future__ import annotations
@@ -20,7 +31,7 @@ from typing import Any, Dict, List, Optional
 
 
 def _format_datetime(ts: float) -> str:
-    """Format timestamp into ISO 8601 string."""
+    """Format timestamp into readable string."""
     return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
 
 
@@ -63,13 +74,12 @@ def _read_pdf(path: Path) -> tuple[str, dict[str, Any]]:
 
     reader = pypdf.PdfReader(str(path))
     page_texts: list[str] = []
-    for i, page in enumerate(reader.pages):
+    for page in reader.pages:
         page_text = page.extract_text() or ""
         page_texts.append(page_text.strip())
 
     full_text = "\n\n".join(page_texts)
 
-    # Extract PDF metadata if available
     pdf_meta = reader.metadata or {}
     metadata: dict[str, Any] = {
         "page_count": len(reader.pages),
@@ -126,14 +136,14 @@ def read_file(filepath: str) -> dict[str, Any]:
         filepath (str): Path to the target file.
 
     Returns:
-        dict: A structured dictionary with the following schema:
-            - success (bool): True if reading succeeded, False otherwise.
+        dict: A structured response with content and metadata:
+            - success (bool): True if successful, False otherwise.
             - filepath (str): Normalized absolute path.
             - filename (str): Base filename.
-            - extension (str): Lowercase file extension (e.g. '.pdf', '.docx', '.txt').
+            - extension (str): File extension in lowercase (e.g., '.pdf').
             - content (str): Extracted text content.
-            - metadata (dict): File stats (size, modified time) + format-specific attributes.
-            - error (str | None): Error description if reading failed.
+            - metadata (dict): Name, size, modified date, and format-specific attributes.
+            - error (str | None): Error message if read failed.
     """
     path = Path(filepath)
 
@@ -164,9 +174,13 @@ def read_file(filepath: str) -> dict[str, Any]:
     try:
         stat = path.stat()
         file_metadata: dict[str, Any] = {
+            "name": path.name,
+            "size": stat.st_size,
             "size_bytes": stat.st_size,
             "size_kb": round(stat.st_size / 1024, 2),
+            "modified_date": _format_datetime(stat.st_mtime),
             "modified_time": _format_datetime(stat.st_mtime),
+            "format": ext.lstrip("."),
         }
 
         if ext == ".pdf":
@@ -216,29 +230,27 @@ def read_file(filepath: str) -> dict[str, Any]:
 
 def list_files(directory: str, extension: Optional[str] = None) -> list[dict[str, Any]]:
     """
-    List all files in a directory, optionally filtered by extension, with metadata.
+    List all files in a directory, optionally filtered by extension, returning file metadata.
 
     Args:
-        directory (str): Directory path to scan.
+        directory (str): Directory path to inspect.
         extension (str, optional): Filter by extension, e.g. '.pdf', 'pdf', '.txt'.
                                    Case-insensitive. Defaults to None (all files).
 
     Returns:
         list[dict]: A list of metadata dicts for matching files. Each dict contains:
-            - name (str): File basename.
-            - filepath (str): Absolute file path.
-            - relative_path (str): Path relative to directory queried.
-            - extension (str): File extension in lowercase (e.g. '.pdf').
+            - name (str): File name.
+            - size (int): File size in bytes.
             - size_bytes (int): File size in bytes.
-            - size_kb (float): File size in kilobytes rounded to 2 decimals.
+            - size_kb (float): File size in kilobytes.
+            - modified_date (str): Last modified datetime (YYYY-MM-DD HH:MM:SS).
             - modified_time (str): Last modified datetime (YYYY-MM-DD HH:MM:SS).
+            - filepath (str): Absolute file path.
+            - extension (str): File extension in lowercase.
     """
     dir_path = Path(directory)
 
-    if not dir_path.exists():
-        return []
-
-    if not dir_path.is_dir():
+    if not dir_path.exists() or not dir_path.is_dir():
         return []
 
     norm_ext: Optional[str] = None
@@ -258,12 +270,13 @@ def list_files(directory: str, extension: Optional[str] = None) -> list[dict[str
                 stat = entry.stat()
                 results.append({
                     "name": entry.name,
-                    "filepath": str(entry.resolve()),
-                    "relative_path": str(entry.relative_to(dir_path) if dir_path.is_absolute() else entry),
-                    "extension": entry.suffix.lower(),
+                    "size": stat.st_size,
                     "size_bytes": stat.st_size,
                     "size_kb": round(stat.st_size / 1024, 2),
+                    "modified_date": _format_datetime(stat.st_mtime),
                     "modified_time": _format_datetime(stat.st_mtime),
+                    "filepath": str(entry.resolve()),
+                    "extension": entry.suffix.lower(),
                 })
     except Exception:
         return []
@@ -277,37 +290,40 @@ def write_file(filepath: str, content: str) -> dict[str, Any]:
 
     Args:
         filepath (str): Target destination path.
-        content (str): Content string to write (written using UTF-8).
+        content (str): Content string to write (written in UTF-8).
 
     Returns:
         dict: A structured dictionary containing:
+            - status (str): 'success' or 'failure'.
             - success (bool): True if write succeeded, False otherwise.
             - filepath (str): Absolute file path.
             - filename (str): Base filename.
             - bytes_written (int): Count of bytes written.
-            - message (str): Human-readable confirmation or error message.
+            - message (str): Status description.
             - error (str | None): Error detail if failed, None otherwise.
     """
     path = Path(filepath)
 
     try:
-        # Create parent directories if they don't already exist
         if path.parent and not path.parent.exists():
             path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(path, "w", encoding="utf-8") as f:
-            bytes_written = f.write(content)
+            f.write(content)
 
+        num_bytes = len(content.encode("utf-8"))
         return {
+            "status": "success",
             "success": True,
             "filepath": str(path.resolve()),
             "filename": path.name,
-            "bytes_written": len(content.encode("utf-8")),
-            "message": f"Successfully wrote {len(content.encode('utf-8'))} bytes to '{path.name}'",
+            "bytes_written": num_bytes,
+            "message": f"Successfully wrote {num_bytes} bytes to '{path.name}'",
             "error": None,
         }
     except Exception as exc:
         return {
+            "status": "failure",
             "success": False,
             "filepath": str(path.resolve()) if path.parent.exists() else str(path),
             "filename": path.name,
@@ -321,26 +337,27 @@ def search_in_file(
     filepath: str, keyword: str, context_lines: int = 1
 ) -> dict[str, Any]:
     """
-    Search for a keyword inside a file's content (case-insensitive) and return matches with context.
+    Search for keywords in file content (case-insensitive) and return matches with context.
 
-    Supports PDF, DOCX, and TXT files by reading their parsed text content.
+    Supports PDF, DOCX, and TXT files.
 
     Args:
         filepath (str): Path to the target file.
         keyword (str): Search term / query (case-insensitive).
-        context_lines (int): Number of surrounding lines before and after match. Defaults to 1.
+        context_lines (int, optional): Surrounding lines before and after match. Defaults to 1.
 
     Returns:
         dict: A structured dictionary containing:
-            - success (bool): True if search executed, False if file could not be read.
+            - success (bool): True if search succeeded, False otherwise.
             - filepath (str): Absolute file path.
-            - filename (str): File name.
+            - filename (str): Base filename.
             - keyword (str): Searched keyword.
             - matches_count (int): Number of matching occurrences.
-            - matches (list[dict]): List of match dicts:
+            - matches (list[dict]): Matching entries:
                 - line_number (int): 1-indexed line number.
-                - line_text (str): Exact line where match occurred.
-                - context (str): Surrounding lines joined as snippet.
+                - line_content (str): Exact matching line text.
+                - line_text (str): Exact matching line text.
+                - context (str): Surrounding text lines snippet.
             - error (str | None): Error description if search failed.
     """
     if not keyword or not keyword.strip():
@@ -380,6 +397,7 @@ def search_in_file(
 
             matches.append({
                 "line_number": idx + 1,
+                "line_content": line.strip(),
                 "line_text": line.strip(),
                 "context": context_snippet.strip(),
             })
@@ -406,7 +424,7 @@ TOOL_DEFINITIONS = [
             "name": "read_file",
             "description": (
                 "Read resume documents (PDF, DOCX, TXT) and extract text content "
-                "along with file metadata (page count, size, modified time)."
+                "along with file metadata (page count, size, modified date)."
             ),
             "parameters": {
                 "type": "object",
@@ -426,7 +444,7 @@ TOOL_DEFINITIONS = [
             "name": "list_files",
             "description": (
                 "List all files in a directory, optionally filtered by extension (.pdf, .docx, .txt), "
-                "and return file metadata such as size and last modified date."
+                "and return file metadata such as name, size, and modified date."
             ),
             "parameters": {
                 "type": "object",
@@ -494,7 +512,6 @@ TOOL_DEFINITIONS = [
     },
 ]
 
-# Map tool names to python callable functions
 TOOL_MAP = {
     "read_file": read_file,
     "list_files": list_files,

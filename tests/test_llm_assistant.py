@@ -4,6 +4,7 @@ test_llm_assistant.py - Tests for LLM File Assistant and Tool Calling Integratio
 Tests:
 - Tool definitions schema conformity
 - Tool execution dispatching
+- Multi-provider initializations (Mock, OpenAI, Anthropic, Groq)
 - End-to-end execution of the 3 required assignment queries:
   1. "Read all resumes in the resumes folder"
   2. "Find resumes mentioning Python experience"
@@ -46,6 +47,15 @@ class TestLLMAssistantExecution:
     def assistant(self):
         return LLMFileAssistant(provider="mock", verbose=False)
 
+    def test_provider_initialization_mock(self):
+        mock_asst = LLMFileAssistant(provider="mock", verbose=False)
+        assert mock_asst.provider == "mock"
+
+    def test_provider_initialization_anthropic_fallback_without_key(self):
+        # Without key should gracefully fall back to mock
+        asst = LLMFileAssistant(provider="anthropic", api_key="", verbose=False)
+        assert asst.provider == "mock"
+
     def test_tool_dispatch(self, assistant):
         result = assistant.execute_tool("list_files", {"directory": "resumes"})
         assert isinstance(result, list)
@@ -62,7 +72,6 @@ class TestLLMAssistantExecution:
 
         assert result["query"] == query
         assert len(result["tool_calls_executed"]) >= 1
-        # First tool call should be list_files
         assert result["tool_calls_executed"][0]["tool"] == "list_files"
         assert "resume_john_doe.pdf" in result["response"]
         assert "resume_alice_smith.pdf" in result["response"]

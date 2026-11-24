@@ -3,10 +3,11 @@ llm_file_assistant.py - LLM-Powered File System Assistant
 
 Integrates file system tools with an LLM using function calling / tool calling.
 Features:
-- Structured OpenAI-compatible tool calling interface.
-- Supports live LLMs (OpenAI, Groq, custom OpenAI-compatible endpoints) and a deterministic Mock engine for offline evaluation.
+- Structured OpenAI & Anthropic-compatible tool calling interface.
+- Supports live LLMs (OpenAI, Anthropic, Groq, custom OpenAI-compatible endpoints)
+  and a deterministic Mock engine for offline evaluation.
 - Autonomous multi-step tool execution loop (discovers files, reads resumes, searches content, writes summaries).
-- Interactive CLI mode and programmatic API.
+- Interactive CLI mode, guided demo, and programmatic API.
 """
 
 from __future__ import annotations
@@ -65,7 +66,6 @@ class MockLLMEngine:
 
         # Intent 1: Create a summary file
         if "summary" in query_lower and ("create" in query_lower or "write" in query_lower or "generate" in query_lower):
-            # Extract target file name
             target_file = "resumes/resume_john_doe.pdf"
             for word in query.replace("'", "").replace('"', "").split():
                 if word.endswith((".pdf", ".docx", ".txt")):
@@ -116,7 +116,6 @@ class MockLLMEngine:
 
         # Intent 2: Search for keyword (e.g. Python, React, DevOps)
         elif "mentioning" in query_lower or "search" in query_lower or "find" in query_lower:
-            # Determine directory and keyword
             directory = "resumes" if "resumes" in query_lower or Path("resumes").exists() else "."
             keyword = "Python"
             if "python" in query_lower:
@@ -147,7 +146,6 @@ class MockLLMEngine:
                         "snippets": [m["line_text"] for m in search_res["matches"][:2]],
                     })
 
-            # Compile final response
             lines = [
                 f"I searched all resume files in the `{directory}` folder for experience with **'{keyword}'**.",
                 f"Found **{len(matching_candidates)} matching candidate(s)** out of {len(files)} files scanned:\n",
@@ -166,7 +164,6 @@ class MockLLMEngine:
             files = tool_executor("list_files", list_args)
             tool_records.append({"tool": "list_files", "arguments": list_args, "result": files})
 
-            # Read first few files to give a comprehensive preview
             read_summaries = []
             for file_info in files[:4]:
                 read_args = {"filepath": file_info["filepath"]}
@@ -180,7 +177,7 @@ class MockLLMEngine:
                 f"Found **{len(files)} resume files** in the `{directory}` directory:\n",
             ]
             for f in files:
-                lines.append(f"- **{f['name']}** ({f['extension'].upper()}, {f['size_kb']} KB, modified {f['modified_time']})")
+                lines.append(f"- **{f['name']}** ({f['extension'].upper()}, {f['size_kb']} KB, modified {f['modified_date']})")
 
             lines.append("\n**Preview of candidate profiles:**")
             for name, ext, prev in read_summaries:
@@ -192,7 +189,7 @@ class MockLLMEngine:
 class LLMFileAssistant:
     """
     Core File System Assistant orchestrating LLM tool calling.
-    Supports OpenAI, Groq, or Mock offline execution.
+    Supports OpenAI, Anthropic, Groq, or Mock offline execution.
     """
 
     def __init__(
@@ -215,14 +212,17 @@ class LLMFileAssistant:
 
     def _initialize_provider(self) -> None:
         """Resolve and initialize provider client."""
-        # Check environment if keys not passed explicitly
         openai_key = self.api_key or os.getenv("OPENAI_API_KEY", "").strip()
         groq_key = os.getenv("GROQ_API_KEY", "").strip()
+        anthropic_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
 
         if self.provider == "auto":
             if openai_key:
                 self.provider = "openai"
                 self.api_key = openai_key
+            elif anthropic_key:
+                self.provider = "anthropic"
+                self.api_key = anthropic_key
             elif groq_key:
                 self.provider = "groq"
                 self.api_key = groq_key
@@ -245,6 +245,21 @@ class LLMFileAssistant:
                 self._log("Notice: openai package not available. Falling back to Mock engine.")
                 self.provider = "mock"
 
+        elif self.provider == "anthropic":
+            key = self.api_key or anthropic_key
+            if not key:
+                self._log("Notice: No ANTHROPIC_API_KEY found. Falling back to Mock engine.")
+                self.provider = "mock"
+                return
+
+            try:
+                import anthropic
+                self.client = anthropic.Anthropic(api_key=key)
+                self.model = self.model or os.getenv("ANTHROPIC_MODEL") or "claude-3-5-sonnet-latest"
+            except ImportError:
+                self._log("Notice: anthropic package not available. Falling back to Mock engine.")
+                self.provider = "mock"
+
         elif self.provider == "groq":
             key = self.api_key or groq_key
             if not key:
@@ -254,7 +269,6 @@ class LLMFileAssistant:
 
             try:
                 from openai import OpenAI
-                # Groq is 100% OpenAI API compatible
                 self.client = OpenAI(
                     api_key=key,
                     base_url="https://api.groq.com/openai/v1",
@@ -281,7 +295,6 @@ class LLMFileAssistant:
         self._log(f"Calling tool: {tool_name}({arguments})", prefix="[Tool Call]")
         try:
             result = func(**arguments)
-            # Log brief result summary
             if isinstance(result, list):
                 self._log(f"-> Returned {len(result)} items", prefix="[Tool Result]")
             elif isinstance(result, dict):
@@ -295,32 +308,85 @@ class LLMFileAssistant:
             self._log(f"-> Exception: {err_msg}", prefix="[Tool Error]")
             return {"success": False, "error": err_msg}
 
+    def _run_anthropic(
+        self, query: str, max_iterations: int = 10
+    ) -> dict[str, Any]:
+        """Run tool calling loop with Anthropic Messages API."""
+        anthropic_tools = [
+            {
+                "name": t["function"]["name"],
+                "description": t["function"]["description"],
+                "input_schema": t["function"]["parameters"],
+            }
+            for t in fs_tools.TOOL_DEFINITIONS
+        ]
+
+        messages: list[dict[str, Any]] = [{"role": "user", "content": query}]
+        tool_records: list[dict[str, Any]] = []
+        iteration = 0
+
+        while iteration < max_iterations:
+            iteration += 1
+            response = self.client.messages.create(
+                model=self.model,
+                system=SYSTEM_PROMPT,
+                messages=messages,
+                tools=anthropic_tools,
+                max_tokens=2048,
+            )
+
+            tool_use_blocks = [b for b in response.content if b.type == "tool_use"]
+            text_blocks = [b.text for b in response.content if b.type == "text"]
+
+            if not tool_use_blocks:
+                final_answer = "\n".join(text_blocks)
+                return {
+                    "query": query,
+                    "response": final_answer.strip(),
+                    "tool_calls_executed": tool_records,
+                    "iterations": iteration,
+                    "provider": "anthropic",
+                    "model": self.model,
+                }
+
+            messages.append({"role": "assistant", "content": response.content})
+
+            tool_results = []
+            for block in tool_use_blocks:
+                fn_name = block.name
+                fn_args = block.input or {}
+                result = self.execute_tool(fn_name, fn_args)
+                tool_records.append({
+                    "tool": fn_name,
+                    "arguments": fn_args,
+                    "result": result,
+                })
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": json.dumps(result, default=str),
+                })
+
+            messages.append({"role": "user", "content": tool_results})
+
+        return {
+            "query": query,
+            "response": "Maximum tool iterations reached.",
+            "tool_calls_executed": tool_records,
+            "iterations": iteration,
+            "provider": "anthropic",
+            "model": self.model,
+        }
+
     def run(
         self,
         query: str,
         conversation_history: Optional[list[dict[str, Any]]] = None,
         max_iterations: int = 10,
     ) -> dict[str, Any]:
-        """
-        Process a user query using LLM tool calling.
-
-        Args:
-            query (str): The natural language query from the user.
-            conversation_history (list, optional): Previous messages in the session.
-            max_iterations (int): Safety threshold for maximum consecutive tool iterations.
-
-        Returns:
-            dict containing:
-                - query (str)
-                - response (str): Final assistant answer.
-                - tool_calls_executed (list): Details of all tools invoked during this query.
-                - iterations (int): Total iterations performed.
-                - provider (str)
-                - model (str)
-        """
+        """Process a user query using LLM tool calling."""
         self._log(f"User Query: '{query}'\n", prefix="[Query]")
 
-        # 1. Use Mock engine if in mock mode
         if self.provider == "mock" or not self.client:
             self._log(f"Running via Deterministic Mock Engine (Model: {self.model})", prefix="[Mode]")
             response_text, tool_records = self.mock_engine.process(
@@ -336,7 +402,9 @@ class LLMFileAssistant:
                 "model": self.model or "mock-deterministic-v1",
             }
 
-        # 2. Live LLM execution with function calling loop
+        if self.provider == "anthropic":
+            return self._run_anthropic(query=query, max_iterations=max_iterations)
+
         self._log(f"Running via Live LLM Provider: {self.provider.upper()} (Model: {self.model})", prefix="[Mode]")
 
         messages: list[dict[str, Any]] = []
@@ -361,8 +429,7 @@ class LLMFileAssistant:
                     tool_choice="auto",
                 )
             except Exception as exc:
-                self._log(f"LLM API Call Error: {exc}. Falling back to deterministic engine for this turn.", prefix="[Error]")
-                # Graceful fallback to mock engine
+                self._log(f"LLM API Call Error: {exc}. Falling back to deterministic engine.", prefix="[Error]")
                 fb_text, fb_records = self.mock_engine.process(query, self.execute_tool)
                 return {
                     "query": query,
@@ -376,9 +443,7 @@ class LLMFileAssistant:
             choice = response.choices[0]
             message = choice.message
 
-            # Check if model requested tool calls
             if message.tool_calls:
-                # Append assistant message with tool calls to conversation
                 messages.append(message)
 
                 for tool_call in message.tool_calls:
@@ -389,7 +454,6 @@ class LLMFileAssistant:
                     except json.JSONDecodeError:
                         fn_args = {}
 
-                    # Execute the tool
                     result = self.execute_tool(fn_name, fn_args)
                     tool_calls_executed.append({
                         "tool": fn_name,
@@ -397,18 +461,13 @@ class LLMFileAssistant:
                         "result": result,
                     })
 
-                    # Append tool result to messages
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call.id,
                         "content": json.dumps(result, default=str),
                     })
-
-                # Loop continues so LLM can observe tool outputs and decide next step
                 continue
-
             else:
-                # LLM finished reasoning and returned final text response
                 final_content = message.content or ""
                 return {
                     "query": query,
@@ -419,7 +478,6 @@ class LLMFileAssistant:
                     "model": self.model,
                 }
 
-        # Reached max iterations
         return {
             "query": query,
             "response": "The assistant reached the maximum tool execution limit before completing.",
@@ -467,8 +525,8 @@ def main():
     parser = argparse.ArgumentParser(description="LLM-Powered File System Assistant")
     parser.add_argument("query", nargs="*", help="Optional query to execute directly")
     parser.add_argument("--interactive", "-i", action="store_true", help="Launch interactive chat mode")
-    parser.add_argument("--provider", "-p", default="auto", choices=["auto", "openai", "groq", "mock"], help="LLM backend provider")
-    parser.add_argument("--model", "-m", default=None, help="Specific model name (e.g. gpt-4o-mini, llama-3.3-70b-versatile)")
+    parser.add_argument("--provider", "-p", default="auto", choices=["auto", "openai", "anthropic", "groq", "mock"], help="LLM backend provider")
+    parser.add_argument("--model", "-m", default=None, help="Specific model name (e.g. gpt-4o-mini, llama-3.3-70b-versatile, claude-3-5-sonnet-latest)")
     parser.add_argument("--quiet", "-q", action="store_true", help="Suppress tool execution logs")
     args = parser.parse_args()
 

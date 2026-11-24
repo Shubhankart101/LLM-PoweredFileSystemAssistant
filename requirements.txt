@@ -5,6 +5,7 @@ reportlab>=4.0.0
 
 # LLM integration & Tool calling
 openai>=1.0.0
+anthropic>=0.30.0
 groq>=0.11.0
 python-dotenv>=1.0.0
 

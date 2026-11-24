@@ -2,10 +2,10 @@
 test_fs_tools.py - Unit test suite for fs_tools.py
 
 Covers:
-- list_files (listing, extension filtering, nonexistent dirs)
+- list_files (listing, extension filtering, nonexistent dirs, name/size/modified date keys)
 - read_file (PDF, DOCX, TXT, missing files, metadata verification)
-- write_file (writing, automatic parent directory creation, error handling)
-- search_in_file (case-insensitivity, context window, non-matches, empty keywords)
+- write_file (writing, automatic parent directory creation, status reporting)
+- search_in_file (case-insensitivity, context window, line_content, non-matches, empty keywords)
 """
 
 import os
@@ -34,13 +34,16 @@ class TestListFiles:
         files = fs_tools.list_files(str(RESUMES_DIR))
         assert len(files) >= 8
         for f in files:
+            # Check exact keys from assignment prompt: (name, size, modified date)
             assert "name" in f
+            assert "size" in f
+            assert "modified_date" in f
+            # Also check helper keys
             assert "filepath" in f
             assert "extension" in f
             assert "size_bytes" in f
             assert "size_kb" in f
-            assert "modified_time" in f
-            assert f["size_bytes"] > 0
+            assert f["size"] > 0
 
     def test_filter_by_extension_with_dot(self):
         pdf_files = fs_tools.list_files(str(RESUMES_DIR), extension=".pdf")
@@ -72,7 +75,8 @@ class TestReadFile:
         assert "John Doe" in result["content"]
         assert "Python" in result["content"]
         assert result["metadata"]["page_count"] >= 1
-        assert result["metadata"]["size_bytes"] > 0
+        assert result["metadata"]["size"] > 0
+        assert "modified_date" in result["metadata"]
 
     def test_read_docx_file(self):
         docx_path = RESUMES_DIR / "resume_bob_kumar.docx"
@@ -108,6 +112,7 @@ class TestWriteFile:
         result = fs_tools.write_file(str(target), content)
 
         assert result["success"] is True
+        assert result["status"] == "success"
         assert target.exists()
         assert target.read_text(encoding="utf-8") == content
         assert result["bytes_written"] == len(content.encode("utf-8"))
@@ -117,6 +122,7 @@ class TestWriteFile:
         fs_tools.write_file(str(target), "Initial text")
         result = fs_tools.write_file(str(target), "Updated text")
         assert result["success"] is True
+        assert result["status"] == "success"
         assert target.read_text(encoding="utf-8") == "Updated text"
 
 
@@ -141,6 +147,7 @@ class TestSearchInFile:
         assert res["matches_count"] >= 1
         first_match = res["matches"][0]
         assert "line_number" in first_match
+        assert "line_content" in first_match
         assert "line_text" in first_match
         assert "context" in first_match
         assert "Kubernetes" in first_match["context"]
