@@ -1,0 +1,33 @@
+======================================================================
+David Wilson - DevOps & Cloud Infrastructure Engineer
+david.wilson@example.com | Phone: +1-555-0107 | Location: Denver, CO
+======================================================================
+
+PROFESSIONAL SUMMARY
+----------------------------------------
+DevOps Engineer with 6 years building secure, scalable infrastructure on AWS and GCP. Extensive experience in Infrastructure as Code (Terraform), Kubernetes cluster management, and Python automation scripting.
+
+CORE TECHNICAL SKILLS
+----------------------------------------
+  * Cloud Providers: AWS, Google Cloud Platform (GCP)
+  * Containerization: Docker, Kubernetes, Helm, ArgoCD
+  * IaC & Config: Terraform, Ansible, CloudFormation
+  * Scripting & CI/CD: Python, Bash, GitHub Actions, GitLab CI, Jenkins
+  * Monitoring: Prometheus, Grafana, Datadog, ELK Stack
+
+WORK EXPERIENCE
+----------------------------------------
+Senior DevOps Engineer | CloudPulse Technologies (2021 - Present)
+- Orchestrated multi-tenant Kubernetes clusters running 200+ containerized microservices.
+- Authored custom Python automation scripts for AWS resource cost governance, reducing cloud spend by 28%.
+- Enforced zero-trust network policies and automated security scanning in CI/CD pipeline.
+
+Cloud Operations Engineer | DataBasecamp (2018 - 2021)
+- Managed automated deployments using Terraform and Ansible across hybrid cloud environments.
+- Reduced mean time to recovery (MTTR) by 60% through proactive alerting in Datadog.
+
+EDUCATION
+----------------------------------------
+B.S. in Computer Information Systems | Colorado State University (2014 - 2018)
+
+======================================================================

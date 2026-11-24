@@ -1,0 +1,32 @@
+======================================================================
+Sarah Connor - Lead UI/UX & Frontend Engineer
+sarah.connor@example.com | Phone: +1-555-0108 | Location: Los Angeles, CA
+======================================================================
+
+PROFESSIONAL SUMMARY
+----------------------------------------
+Frontend Engineer and Designer with 7 years crafting intuitive, accessible, and delightful digital experiences. Deep expertise in React, Next.js, design systems, and frontend performance.
+
+CORE TECHNICAL SKILLS
+----------------------------------------
+  * Frontend Core: JavaScript (ESNext), TypeScript, HTML5, CSS3/Sass
+  * Libraries: React, Next.js, Vue.js, Tailwind CSS, Radix UI, Storybook
+  * Design & Prototyping: Figma, Adobe XD, Design Systems, Accessibility (WCAG 2.1 AA)
+  * Testing & Tooling: Jest, React Testing Library, Vite, Webpack
+
+WORK EXPERIENCE
+----------------------------------------
+Lead Frontend Engineer | PixelCraft Studio (2020 - Present)
+- Created an open-source design system adopted by 15 engineering squads across web and mobile.
+- Rewrote client dashboard in Next.js and TypeScript, slashing bundle size by 50%.
+- Spearheaded accessibility audits to achieve complete WCAG 2.1 AA compliance.
+
+Frontend Developer | CreativePulse (2017 - 2020)
+- Built interactive marketing websites with high-converting animations and responsive layouts.
+- Collaborated closely with product designers to prototype rapid proof-of-concepts.
+
+EDUCATION
+----------------------------------------
+B.F.A. in Digital Arts & Design | UCLA (2013 - 2017)
+
+======================================================================

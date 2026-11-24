@@ -1,0 +1,24 @@
+CANDIDATE SUMMARY REPORT
+==================================================
+Candidate: John Doe
+Source File: resumes/resume_john_doe.pdf
+Format: .PDF
+Generated: File System Assistant LLM
+
+EXECUTIVE SUMMARY:
+Extracted candidate profile with key competencies and experience details.
+
+DOCUMENT DETAILS:
+- Word count: 201
+- Page/Section count: 1
+
+EXCERPT:
+John Doe
+Senior Python Backend Engineer
+john.doe@example.com | Phone: +1-555-0101 | Location: San Francisco, CA
+PROFESSIONAL SUMMARY
+Senior Backend Engineer with 7+ years of expertise in architecting scalable distributed systems using Python, FastAPI, and
+Django. Proven track record of reducing API latency by 45% and designing resilient microservices on AWS and Kubernetes.
+CORE TECHNICAL SKILLS
+ ...
+==================================================

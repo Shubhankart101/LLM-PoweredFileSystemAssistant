@@ -1,0 +1,13 @@
+# Core document parsing dependencies
+pypdf>=5.0.0
+python-docx>=1.1.0
+reportlab>=4.0.0
+
+# LLM integration & Tool calling
+openai>=1.0.0
+groq>=0.11.0
+python-dotenv>=1.0.0
+
+# Testing & Utilities
+pytest>=8.0.0
+rich>=13.0.0
