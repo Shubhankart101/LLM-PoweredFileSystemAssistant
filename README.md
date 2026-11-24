@@ -9,7 +9,7 @@
 
 An enterprise-ready, autonomous file system assistant powered by Large Language Models (LLMs) with structured function calling. It inspects local and cloud directories, parses diverse document formats (PDF, DOCX, TXT), performs case-insensitive keyword searches with surrounding line context, and generates structured document summaries directly onto the filesystem.
 
-Includes a complete **CI/CD pipeline**, **Infrastructure as Code (Terraform)** for AWS cloud deployment, **Docker containerization**, and a modular **Documentation Hub** under [`docs/`](docs/).
+Includes a complete **CI/CD pipeline**, **Infrastructure as Code (Terraform) with resource modules under `infra/`**, **Docker containerization**, and detailed technical documentation under [`docs/`](docs/).
 
 ---
 
@@ -18,8 +18,8 @@ Includes a complete **CI/CD pipeline**, **Infrastructure as Code (Terraform)** f
 - [🎯 Learning Objectives & Highlights](#-learning-objectives--highlights)
 - [🏗️ System Architecture & Workflow](#️-system-architecture--workflow)
 - [🔄 CI/CD Pipeline Architecture](#-cicd-pipeline-architecture)
-- [☁️ Cloud Infrastructure Deployment (IaC)](#️-cloud-infrastructure-deployment-iac)
-- [📖 Documentation Hub (`docs/`)](#-documentation-hub-docs)
+- [☁️ Cloud Infrastructure Deployment (IaC Modules)](#️-cloud-infrastructure-deployment-iac-modules)
+- [📖 Technical Documentation (`docs/`)](#-technical-documentation-docs)
 - [📁 Project Structure](#-project-structure)
 - [🚀 Quickstart & Installation](#-quickstart--installation)
 - [🐳 Docker & Container Deployment](#-docker--container-deployment)
@@ -37,7 +37,7 @@ Includes a complete **CI/CD pipeline**, **Infrastructure as Code (Terraform)** f
 - **Multi-Format Document Parsing**: Native extraction of text content and metadata from **PDF** (`pypdf`), **DOCX** (`python-docx`), and **TXT** files.
 - **Robust Error Handling**: Gracefully handles missing files, permission anomalies, non-existent directories, and API fallbacks.
 - **Multi-Provider Support**: Compatible with **OpenAI** (`gpt-4o-mini`), **Anthropic** (`claude-3-5-sonnet-latest`), **Groq** (`llama-3.3-70b-versatile`), and an included **Deterministic Mock Engine** for 100% offline evaluation without API keys.
-- **Cloud & DevOps Ready**: Production multi-stage `Dockerfile`, `docker-compose.yml`, GitHub Actions CI/CD with security scanning, and modular Terraform configurations for AWS ECS Fargate, S3, Secrets Manager, and CloudWatch.
+- **Cloud & DevOps Ready**: Production multi-stage `Dockerfile`, `docker-compose.yml`, GitHub Actions CI/CD with security scanning, and modular Terraform configurations with dedicated resource modules under `infra/modules/`.
 
 ---
 
@@ -107,24 +107,41 @@ Detailed workflow breakdown and configuration: [`docs/ci_cd_pipeline.md`](docs/c
 
 ---
 
-## ☁️ Cloud Infrastructure Deployment (IaC)
+## ☁️ Cloud Infrastructure Deployment (IaC Modules)
 
-Enterprise-grade modular Terraform infrastructure located in [`infra/terraform/`](infra/terraform/):
+The infrastructure is organized into dedicated, reusable Terraform modules located under [`infra/modules/`](infra/modules/), orchestrated by the root Terraform configuration in [`infra/terraform/`](infra/terraform/):
+
+```
+infra/
+├── modules/
+│   ├── vpc/            # VPC (10.0.0.0/16), public/private subnets, IGW, NAT GW, security groups
+│   ├── s3/             # S3 bucket for resumes & summaries (SSE-AES256, versioning, lifecycle rules)
+│   ├── secrets/        # AWS Secrets Manager for LLM API keys (OpenAI, Anthropic, Groq)
+│   ├── ecs/            # ECS Fargate cluster, task definition, ALB, target groups, IAM roles
+│   └── monitoring/     # CloudWatch log group, error rate metric filters, and automated alarms
+└── terraform/          # Root orchestration calling each resource module
+    ├── main.tf         # Module invocations
+    ├── variables.tf    # Strongly-typed input variables
+    ├── outputs.tf      # Exported endpoints, ARNs, and identifiers
+    ├── backend.tf      # Remote S3 state storage & DynamoDB state locking
+    ├── terraform.tfvars.example # Sample dev and prod parameters
+    └── TERRAFORM_GUIDE.md # Execution and provisioning walkthrough
+```
 
 ```mermaid
 flowchart TD
     subgraph AWS["AWS Cloud Environment"]
-        subgraph VPC["Dedicated VPC (10.0.0.0/16)"]
+        subgraph VPC["VPC Module (infra/modules/vpc)"]
             ALB["Application Load Balancer<br/>(Public Subnets)"]
             
             subgraph Private["Private Subnets"]
-                ECS["ECS Fargate Service<br/>(Assistant Container)"]
+                ECS["ECS Module (infra/modules/ecs)<br/>ECS Fargate Service"]
             end
         end
 
-        S3["AWS S3 Bucket<br/>(SSE-AES256, Lifecycle, Versioning)<br/>• resumes/<br/>• summaries/"]
-        SM["AWS Secrets Manager<br/>(OPENAI / ANTHROPIC / GROQ Keys)"]
-        CW["CloudWatch Logs & Alarms<br/>(Metrics & Error Alerts)"]
+        S3["S3 Module (infra/modules/s3)<br/>SSE-AES256, Lifecycle, Versioning<br/>• resumes/<br/>• summaries/"]
+        SM["Secrets Module (infra/modules/secrets)<br/>AWS Secrets Manager<br/>(OPENAI / ANTHROPIC / GROQ Keys)"]
+        CW["Monitoring Module (infra/modules/monitoring)<br/>CloudWatch Logs & Metric Alarms"]
     end
 
     ALB --> ECS
@@ -133,28 +150,27 @@ flowchart TD
     ECS -->|"Stream Logs & Metrics"| CW
 ```
 
-- **Storage**: S3 dual-folder bucket with SSE-AES256 encryption, versioning, and lifecycle policies (transitions to Standard-IA at 30 days, Glacier at 90 days).
-- **Secrets Management**: AWS Secrets Manager prevents API keys from ever being exposed in code or Git.
-- **Compute**: AWS ECS Fargate cluster with rolling deployments, health checks, and autoscaling.
-- **Networking**: Custom VPC with public subnets, private subnets, security groups, and an Application Load Balancer.
-- **Monitoring**: CloudWatch log group, error rate metric filters, and automated alarms.
+- **S3 Module** ([`infra/modules/s3`](infra/modules/s3)): Dual-folder bucket (`resumes/` and `summaries/`) with SSE-AES256 encryption, versioning, 100% public access block, and automated lifecycle transitions (Standard-IA at 30 days, Glacier at 90 days).
+- **Secrets Module** ([`infra/modules/secrets`](infra/modules/secrets)): AWS Secrets Manager dynamically provides API keys without exposing secrets in code or Git.
+- **ECS Module** ([`infra/modules/ecs`](infra/modules/ecs)): AWS ECS Fargate cluster with rolling zero-downtime deployments, Application Load Balancer, and IAM least-privilege roles.
+- **VPC Module** ([`infra/modules/vpc`](infra/modules/vpc)): Multi-AZ VPC with public/private subnets, internet gateway, NAT gateway, and isolated security groups.
+- **Monitoring Module** ([`infra/modules/monitoring`](infra/modules/monitoring)): CloudWatch log group, application error metric filter, and alarms for error spikes, high CPU/memory, and unhealthy targets.
 
-Detailed infrastructure specifications: [`docs/infrastructure.md`](docs/infrastructure.md) and [`infra/terraform/README.md`](infra/terraform/README.md).
+Detailed infrastructure specifications: [`docs/infrastructure.md`](docs/infrastructure.md) and [`infra/terraform/TERRAFORM_GUIDE.md`](infra/terraform/TERRAFORM_GUIDE.md).
 
 ---
 
-## 📖 Documentation Hub (`docs/`)
+## 📖 Technical Documentation (`docs/`)
 
-Explore the in-depth documentation suite:
+Deep-dive documentation is organized into topic-specific files inside the [`docs/`](docs/) folder:
 
 | Document | Description |
 |---|---|
-| 📘 [`docs/README.md`](docs/README.md) | **Central Documentation Hub**: Overview, reading paths by role, and navigation index. |
-| 🏗️ [`docs/architecture.md`](docs/architecture.md) | **Architecture Guide**: Detailed component breakdown, ReAct loop, tool calling sequence diagrams, and security model. |
-| ☁️ [`docs/infrastructure.md`](docs/infrastructure.md) | **Cloud Infrastructure**: AWS reference topology, Terraform modules, IAM least-privilege policies, and CloudWatch metrics. |
-| 🔄 [`docs/ci_cd_pipeline.md`](docs/ci_cd_pipeline.md) | **CI/CD Pipeline**: GitHub Actions workflows, test matrices, SAST scanning, container buildx caching, and release automation. |
-| 📑 [`docs/api_reference.md`](docs/api_reference.md) | **API Reference**: Tool input schemas, return object types, format metadata, error models, and Python SDK contracts. |
-| 🚀 [`docs/deployment_guide.md`](docs/deployment_guide.md) | **Deployment Guide**: Step-by-step local bare-metal, Docker Compose, AWS ECS Fargate deployment, and operational runbook. |
+| 🏗️ [**`docs/architecture.md`**](docs/architecture.md) | **Architecture Guide**: Detailed component breakdown, ReAct loop, tool calling sequence diagrams, and security model. |
+| ☁️ [**`docs/infrastructure.md`**](docs/infrastructure.md) | **Cloud Infrastructure**: AWS reference topology, Terraform resource modules, IAM least-privilege policies, and CloudWatch metrics. |
+| 🔄 [**`docs/ci_cd_pipeline.md`**](docs/ci_cd_pipeline.md) | **CI/CD Pipeline**: GitHub Actions workflows, test matrices, SAST scanning, container buildx caching, and release automation. |
+| 📑 [**`docs/api_reference.md`**](docs/api_reference.md) | **API Reference**: Tool input schemas, return object types, format metadata, error models, and Python SDK contracts. |
+| 🚀 [**`docs/deployment_guide.md`**](docs/deployment_guide.md) | **Deployment Guide**: Step-by-step local bare-metal, Docker Compose, AWS ECS Fargate deployment, and operational runbook. |
 
 ---
 
@@ -163,6 +179,7 @@ Explore the in-depth documentation suite:
 ```
 LLM-PoweredFileSystemAssistant/
 │
+├── README.md                    # Primary documentation (outside at root)
 ├── fs_tools.py                  # Part A: Core File System Tools (read, list, write, search)
 ├── llm_file_assistant.py        # Part B: Autonomous LLM Assistant with function calling loop
 ├── create_sample_resumes.py     # Generator for realistic sample resumes (PDF, DOCX, TXT)
@@ -170,7 +187,6 @@ LLM-PoweredFileSystemAssistant/
 ├── requirements.txt             # Python dependencies
 ├── pytest.ini                   # Pytest configuration
 ├── .env.example                 # Environment variables template
-├── README.md                    # Main repository documentation
 │
 ├── Dockerfile                   # Multi-stage production container build (non-root appuser)
 ├── .dockerignore                # Production container build exclusions
@@ -181,17 +197,22 @@ LLM-PoweredFileSystemAssistant/
 │       ├── ci-cd.yml            # Lint, test matrix, security audit, Docker build, Terraform validate
 │       └── security-scan.yml    # CodeQL SAST and Trivy vulnerability scanner
 │
-├── infra/
-│   └── terraform/               # Modular Infrastructure as Code
-│       ├── main.tf              # AWS resources (VPC, ECS Fargate, S3, Secrets Manager, ALB, CloudWatch)
-│       ├── variables.tf         # Strongly-typed input variables
-│       ├── outputs.tf           # Exported identifiers and endpoints
-│       ├── backend.tf           # Remote state S3 and DynamoDB lock configuration
+├── infra/                       # Cloud Infrastructure as Code
+│   ├── modules/                 # Dedicated resource modules
+│   │   ├── vpc/                 # VPC, subnets, IGW, NAT GW, security groups
+│   │   ├── s3/                  # S3 storage, encryption, lifecycle rules
+│   │   ├── secrets/             # AWS Secrets Manager for LLM API keys
+│   │   ├── ecs/                 # ECS Fargate, ALB, task definitions, IAM
+│   │   └── monitoring/          # CloudWatch log group & metric alarms
+│   └── terraform/               # Root Terraform orchestration
+│       ├── main.tf              # Module invocations
+│       ├── variables.tf         # Input parameters
+│       ├── outputs.tf           # Exported identifiers
+│       ├── backend.tf           # Remote state configuration
 │       ├── terraform.tfvars.example # Sample dev and prod parameters
-│       └── README.md            # Terraform execution walkthrough
+│       └── TERRAFORM_GUIDE.md   # Terraform execution walkthrough
 │
-├── docs/                        # Complete Documentation Hub
-│   ├── README.md                # Documentation index and architecture overview
+├── docs/                        # Topic-specific technical documentation
 │   ├── architecture.md          # Detailed architecture, sequence diagrams, and data flows
 │   ├── infrastructure.md        # Cloud architecture, IAM security, and monitoring
 │   ├── ci_cd_pipeline.md        # Pipeline stages, security gates, and release rules
@@ -422,9 +443,9 @@ Follow this structured script when recording your submission video:
 
 | Time | Section | Action & Command | What to Explain |
 |---|---|---|---|
-| **0:00 - 0:30** | **Introduction & Overview** | Show VS Code project structure | Introduce the project, learning objectives, 4 core tools in `fs_tools.py`, and the `docs/` documentation hub. |
+| **0:00 - 0:30** | **Introduction & Overview** | Show VS Code project structure | Introduce the project, learning objectives, 4 core tools in `fs_tools.py`, and the `docs/` technical documentation. |
 | **0:30 - 1:00** | **Core Tools Demo** | Run `python demo.py` | Point out the 8 sample resumes in `resumes/` across PDF, DOCX, and TXT. Show text and metadata extraction. |
 | **1:00 - 1:40** | **Tool Calling: Query 1 & 2** | Step through Queries 1 & 2 | Point out the `[Tool Call]` traces: `list_files`, then `search_in_file`. Highlight how candidates with Python are found while non-Python resumes (e.g. Product Manager, Frontend) are filtered out. |
 | **1:40 - 2:10** | **Tool Calling: Query 3** | Step through Query 3 | Show multi-step execution: reading `resume_john_doe.pdf`, synthesizing the summary, and calling `write_file` to save `summaries/summary_john_doe.txt`. Open the generated summary file. |
-| **2:10 - 2:30** | **CI/CD & Infrastructure** | Show `.github/workflows/ci-cd.yml` and `infra/terraform/` | Explain the CI/CD pipeline, Docker containerization, and AWS Terraform infrastructure. |
+| **2:10 - 2:30** | **CI/CD & Modular Infrastructure** | Show `.github/workflows/ci-cd.yml` and `infra/modules/` | Explain the CI/CD pipeline, Docker containerization, and modular AWS Terraform resources under `infra/modules/`. |
 | **2:30 - 2:45** | **Test Suite** | Run `pytest` | Show all 24 automated tests passing cleanly. Conclude the video. |
